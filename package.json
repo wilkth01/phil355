@@ -10,7 +10,9 @@
     "dev": "astro dev",
     "build": "astro check && astro build",
     "preview": "astro preview",
-    "check": "astro check"
+    "check": "astro check",
+    "test": "vitest run",
+    "ci": "npm test && npm run build"
   },
   "dependencies": {
     "astro": "^7.4.10"
@@ -18,6 +20,8 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
     "@types/node": "^26.6.6",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0",
+    "yaml": "^2.9.1"
   }
 }

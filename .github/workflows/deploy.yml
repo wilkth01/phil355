@@ -4,6 +4,10 @@ on:
   # Deploy every time main changes.
   push:
     branches: [main]
+  # Rebuild every night just after midnight Eastern, so the copy of the home
+  # page that visitors without JavaScript see is never more than a day old.
+  schedule:
+    - cron: "15 5 * * *"
   # Allow a manual run from the Actions tab.
   workflow_dispatch:
 
@@ -28,6 +32,8 @@ jobs:
         uses: withastro/action@v6
         with:
           node-version: 26
+          # Run the tests first; a failing test stops the deploy.
+          build-cmd: npm run ci
 
   deploy:
     needs: build

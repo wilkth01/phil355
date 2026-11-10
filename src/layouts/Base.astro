@@ -13,6 +13,12 @@ const pageTitle = title ? `${title} · ${site.title}` : site.title;
 
 // import.meta.env.BASE_URL may or may not end in a slash; make it end in one.
 const home = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+
+const nav = [
+  { href: home, label: "Now" },
+  { href: `${home}schedule/`, label: "Schedule" },
+];
+const here = Astro.url.pathname.replace(/\/?$/, "/");
 ---
 
 <!doctype html>
@@ -27,9 +33,25 @@ const home = import.meta.env.BASE_URL.replace(/\/?$/, "/");
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
-      <a class="site-title" href={home}>{site.title}</a>
-      <p class="site-term">{site.term}</p>
+      <div>
+        <a class="site-title" href={home}>{site.title}</a>
+        <p class="site-term">{site.term}</p>
+      </div>
+      <nav aria-label="Main">
+        <ul>
+          {
+            nav.map((item) => (
+              <li>
+                <a href={item.href} aria-current={item.href === here ? "page" : undefined}>
+                  {item.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
     </header>
+    <p id="date-preview" class="preview-banner" data-home={home} hidden></p>
     <main id="main">
       <slot />
     </main>
@@ -38,5 +60,46 @@ const home = import.meta.env.BASE_URL.replace(/\/?$/, "/");
         {site.instructor.name}, {site.instructor.office}{" "}·{" "}<a href={`mailto:${site.instructor.email}`}>{site.instructor.email}</a>
       </p>
     </footer>
+
+    <script>
+      // When the address carries ?date=YYYY-MM-DD, say so on every page and
+      // keep the date on links within the site.
+      import { readClock } from "../lib/clock";
+      import { formatFull } from "../lib/dates";
+      import { site } from "../site.config";
+
+      const clock = readClock(site.timezone, location.search);
+      const banner = document.getElementById("date-preview");
+
+      if (banner && (clock.preview || clock.invalid)) {
+        const message = clock.preview
+          ? `Previewing ${formatFull(clock.today)}. `
+          : "The date in the address is not a real date, so this is today’s view. ";
+        const back = document.createElement("a");
+        back.href = location.pathname;
+        back.textContent = clock.preview ? "Back to today" : "Clear it";
+        back.dataset.keepHref = "";
+        banner.append(message, back);
+        banner.hidden = false;
+      }
+
+      if (clock.preview) {
+        const sitePath = banner?.dataset.home ?? "/";
+        document.addEventListener(
+          "click",
+          (event) => {
+            const link = (event.target as Element | null)?.closest?.("a[href]");
+            if (!(link instanceof HTMLAnchorElement) || "keepHref" in link.dataset) return;
+            const url = new URL(link.href);
+            if (url.origin !== location.origin || !url.pathname.startsWith(sitePath)) return;
+            if (!url.searchParams.has("date")) {
+              url.searchParams.set("date", clock.today);
+              link.href = url.toString();
+            }
+          },
+          true,
+        );
+      }
+    </script>
   </body>
 </html>

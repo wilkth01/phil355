@@ -1,9 +1,51 @@
 ---
 import Base from "../layouts/Base.astro";
+import { formatFull } from "../lib/dates";
+import { base, buildDate, loadSchedule } from "../lib/load-schedule";
+import { computeNow } from "../lib/now";
+import { renderNow, type RenderContext } from "../lib/render-now";
 import { site } from "../site.config";
+
+const schedule = await loadSchedule();
+const today = buildDate();
+const ctx: RenderContext = {
+  base,
+  canvasUrl: site.canvasUrl,
+  courseName: site.title,
+  termName: site.term,
+};
+
+// Drawn here for the build date; redrawn in the browser for today.
+const html = renderNow(computeNow(schedule, today), ctx);
+const payload = JSON.stringify({ schedule, ctx }).replace(/</g, "\\u003c");
 ---
 
-<Base description={`Course site for ${site.title}, ${site.term}.`}>
-  <h1>{site.title}</h1>
-  <p>{site.term}. This site is being built. The schedule, readings, and assignments will appear here.</p>
+<Base description={`This week in ${site.title}, ${site.term}.`}>
+  <div id="now" data-date={today} set:html={html} />
+  <noscript>
+    <p class="fine">
+      This is the view for {formatFull(today)}, the day the site was last rebuilt. With JavaScript on, this page shows today.
+    </p>
+  </noscript>
+
+  <script type="application/json" id="schedule-data" set:html={payload} />
+
+  <script>
+    import { readClock } from "../lib/clock";
+    import { computeNow } from "../lib/now";
+    import { renderNow, type RenderContext } from "../lib/render-now";
+    import type { Schedule } from "../lib/schedule";
+
+    const target = document.getElementById("now");
+    const source = document.getElementById("schedule-data");
+
+    if (target && source?.textContent) {
+      const { schedule, ctx } = JSON.parse(source.textContent) as { schedule: Schedule; ctx: RenderContext };
+      const { today } = readClock(schedule.timezone, location.search);
+      if (today !== target.dataset.date) {
+        target.innerHTML = renderNow(computeNow(schedule, today), ctx);
+        target.dataset.date = today;
+      }
+    }
+  </script>
 </Base>

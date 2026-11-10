@@ -1,0 +1,42 @@
+{
+  "classMeetings": 28,
+  "readingTickets": 9,
+  "logs": 12,
+  "absencesAllowed": {
+    "A": 2,
+    "B": 3,
+    "C": 4
+  },
+  "ticketsPassed": {
+    "A": 8,
+    "B": 7,
+    "C": 6
+  },
+  "logsCompleted": {
+    "A": 10,
+    "B": 9,
+    "C": 8
+  },
+  "requiredOfAll": [
+    "Exhibition passes the Crit",
+    "Solo docent turn",
+    "Conference attended with outline",
+    "Both paper sittings"
+  ],
+  "tierOptions": {
+    "options": [
+      "own-case",
+      "public-piece"
+    ],
+    "required": {
+      "A": 2,
+      "B": 1,
+      "C": 0
+    },
+    "labels": {
+      "A": "Both",
+      "B": "One",
+      "C": "Neither"
+    }
+  }
+}

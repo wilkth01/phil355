@@ -1,0 +1,235 @@
+---
+import Base from "../layouts/Base.astro";
+import { sessionKinds } from "../content/schemas";
+import { addDays, formatLong, formatRange, formatShort } from "../lib/dates";
+import { aiMarker, citation, dueLabel, dueTime, kindLabel, roleLabel } from "../lib/html";
+import { buildDate, loadSchedule } from "../lib/load-schedule";
+import type { Week } from "../lib/schedule";
+import { site } from "../site.config";
+
+const schedule = await loadSchedule();
+const today = buildDate();
+const sessionByNumber = new Map(schedule.sessions.map((s) => [s.number, s]));
+const kinds = sessionKinds.filter((k) => schedule.sessions.some((s) => s.kind === k));
+const teachingWeeks = schedule.weeks.filter((w) => w.kind === "teaching").length;
+
+function weekHeading(week: Week): string {
+  if (week.kind === "teaching") return `Week ${week.number}`;
+  const named = week.keyDates.find((k) => k.kind === week.kind);
+  return named?.label ?? "No sessions";
+}
+
+function weekDates(week: Week): string {
+  const named = week.kind === "teaching" ? undefined : week.keyDates.find((k) => k.kind === week.kind);
+  // Monday to Friday for a teaching week; the break's or exam week's own dates otherwise.
+  return named ? formatRange(named.start, named.end) : formatRange(week.start, addDays(week.start, 4));
+}
+---
+
+<Base title="Schedule" description={`Every week of ${site.title}, ${site.term}.`}>
+  <h1>Schedule</h1>
+  <p class="lede">
+    {site.term}. {teachingWeeks} weeks, {schedule.sessions.length} sessions.{" "}
+    <a id="jump-current" href="#" hidden>Jump to this week</a>
+  </p>
+
+  <form id="kind-filter" class="filter" hidden>
+    <label for="kind-select">Show</label>
+    <select id="kind-select" name="kind">
+      <option value="all">All sessions</option>
+      {kinds.map((k) => <option value={k}>{kindLabel(k)}</option>)}
+    </select>
+    <p id="filter-status" class="fine" role="status"></p>
+  </form>
+
+  {
+    schedule.weeks.map((week) => {
+      const current = today >= week.start && today <= week.end;
+      const id = `week-${week.start}`;
+      // Key dates that carry a week's heading are not repeated as notes.
+      const notes = week.keyDates.filter((k) => week.kind === "teaching" || k.kind !== week.kind);
+      return (
+        <section
+          class:list={["week", `week-${week.kind}`, { "is-current": current }]}
+          id={id}
+          data-start={week.start}
+          data-end={week.end}
+          aria-labelledby={`${id}-heading`}
+          aria-current={current ? "date" : undefined}
+        >
+          <header class="week-header">
+            <h2 id={`${id}-heading`}>{weekHeading(week)}</h2>
+            <p class="week-dates">{weekDates(week)}</p>
+            <p class="this-week" hidden={!current}>This week</p>
+          </header>
+
+          {week.sessions.length > 0 && (
+            <ol class="sessions">
+              {week.sessions.map((n) => {
+                const s = sessionByNumber.get(n)!;
+                const meta = [`Session ${s.number}`];
+                if (s.cycle) meta.push(`Cycle ${s.cycle}`);
+                if (s.ticket) meta.push("Reading ticket at the start");
+                return (
+                  <li class="session" data-kind={s.kind}>
+                    <p class="when">{formatShort(s.date)}</p>
+                    <div class="session-main">
+                      <h3 class="session-title">{s.title}</h3>
+                      <p class="session-meta">
+                        <span class="kind">{kindLabel(s.kind)}</span>{" "}
+                        <Fragment set:html={aiMarker(s.ai)} />{" "}
+                        <span class="fine">{meta.join(" · ")}</span>
+                      </p>
+                      {s.bring && <p class="session-note">Bring: {s.bring}</p>}
+                      {s.readBefore.length > 0 && (
+                        <div class="reads">
+                          <p class="reads-label">Read before class</p>
+                          <ul class="reading-list">
+                            {s.readBefore.map((slug) => {
+                              const r = schedule.readings[slug]!;
+                              return (
+                                <li>
+                                  <span class="role">{roleLabel(r.role)}</span>{" "}
+                                  <span class="citation" set:html={citation(r)} />
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+
+          {week.due.length > 0 && (
+            <div class="week-due">
+              <h3>Due</h3>
+              <ul class="due-list">
+                {week.due.map((d) => (
+                  <li>
+                    <span class="due-label">{dueLabel(d)}</span>{" "}
+                    <span class="due-when">
+                      {formatLong(d.date)}
+                      {dueTime(d)}
+                    </span>
+                    {d.note && (
+                      <Fragment>
+                        {" "}
+                        <span class="fine">{d.note}</span>
+                      </Fragment>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {notes.length > 0 && (
+            <ul class="week-notes">
+              {notes.map((k) => (
+                <li>
+                  {k.label}
+                  <span class="fine">
+                    {" · "}
+                    {k.start === k.end ? formatLong(k.start) : formatRange(k.start, k.end)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      );
+    })
+  }
+
+  <script>
+    import { readClock } from "../lib/clock";
+    import { site } from "../site.config";
+
+    const STORAGE_KEY = "phil355:schedule-kind";
+    const weeks = [...document.querySelectorAll<HTMLElement>(".week")];
+
+    // ---- Mark the current week for today's date ----
+    const { today } = readClock(site.timezone, location.search);
+    const jump = document.getElementById("jump-current") as HTMLAnchorElement | null;
+    let currentId: string | null = null;
+    for (const week of weeks) {
+      const current = (week.dataset.start ?? "") <= today && today <= (week.dataset.end ?? "");
+      week.classList.toggle("is-current", current);
+      if (current) {
+        week.setAttribute("aria-current", "date");
+        currentId = week.id;
+      } else {
+        week.removeAttribute("aria-current");
+      }
+      const badge = week.querySelector<HTMLElement>(".this-week");
+      if (badge) badge.hidden = !current;
+    }
+    if (jump && currentId) {
+      jump.href = `#${currentId}`;
+      jump.dataset.keepHref = "";
+      jump.hidden = false;
+    }
+
+    // ---- Filter by kind of session ----
+    const form = document.getElementById("kind-filter") as HTMLFormElement | null;
+    const select = document.getElementById("kind-select") as HTMLSelectElement | null;
+    const status = document.getElementById("filter-status");
+
+    function remembered(): string | null {
+      try {
+        return localStorage.getItem(STORAGE_KEY);
+      } catch {
+        return null;
+      }
+    }
+
+    function remember(kind: string) {
+      try {
+        localStorage.setItem(STORAGE_KEY, kind);
+      } catch {
+        // Storage is unavailable; the filter still works for this visit.
+      }
+    }
+
+    function apply(kind: string, announce: boolean) {
+      let shown = 0;
+      let total = 0;
+      for (const week of weeks) {
+        const sessions = [...week.querySelectorAll<HTMLElement>(".session")];
+        let visible = 0;
+        for (const session of sessions) {
+          const match = kind === "all" || session.dataset.kind === kind;
+          session.hidden = !match;
+          if (match) visible++;
+        }
+        total += sessions.length;
+        shown += visible;
+        // With a filter on, a week with nothing to show steps aside.
+        week.hidden = kind !== "all" && visible === 0;
+      }
+      if (status && announce) {
+        const label = select?.selectedOptions[0]?.textContent ?? kind;
+        status.textContent =
+          kind === "all" ? `Showing all ${total} sessions.` : `Showing ${shown} of ${total} sessions: ${label}.`;
+      }
+    }
+
+    if (form && select) {
+      form.hidden = false;
+      form.addEventListener("submit", (event) => event.preventDefault());
+      const saved = remembered();
+      if (saved && [...select.options].some((o) => o.value === saved)) {
+        select.value = saved;
+        apply(saved, saved !== "all");
+      }
+      select.addEventListener("change", () => {
+        remember(select.value);
+        apply(select.value, true);
+      });
+    }
+  </script>
+</Base>

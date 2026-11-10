@@ -1,0 +1,33 @@
+{
+  "keyDates": [
+    {
+      "start": "2027-01-12",
+      "label": "First session"
+    },
+    {
+      "start": "2027-01-19",
+      "label": "Drop/add closes"
+    },
+    {
+      "start": "2027-03-08",
+      "end": "2027-03-12",
+      "label": "Mid-term break, no sessions",
+      "kind": "break"
+    },
+    {
+      "start": "2027-03-15",
+      "end": "2027-03-19",
+      "label": "AI Week"
+    },
+    {
+      "start": "2027-04-29",
+      "label": "Last session"
+    },
+    {
+      "start": "2027-05-03",
+      "end": "2027-05-07",
+      "label": "Final exam week; second paper sitting, exact slot to be supplied",
+      "kind": "finals"
+    }
+  ]
+}

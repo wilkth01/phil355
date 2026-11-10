@@ -1,0 +1,25 @@
+# build output
+dist/
+.astro/
+
+# dependencies
+node_modules/
+
+# logs
+npm-debug.log*
+
+# environment variables
+.env
+.env.*
+!.env.example
+
+# editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Assigned readings never go in the repository (brief, section 2).
+*.pdf
+*.docx
+*.pptx

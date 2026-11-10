@@ -1,0 +1,9 @@
+---
+import Base from "../layouts/Base.astro";
+import { site } from "../site.config";
+---
+
+<Base description={`Course site for ${site.title}, ${site.term}.`}>
+  <h1>{site.title}</h1>
+  <p>{site.term}. This site is being built. The schedule, readings, and assignments will appear here.</p>
+</Base>

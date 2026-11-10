@@ -1,0 +1,141 @@
+/* Phase 0 base styles. System fonts for now; the self-hosted serif and
+   sans arrive with the design work in Phase 2. */
+
+:root {
+  color-scheme: light dark;
+
+  --paper: #fdfcf9;
+  --ink: #1b1a18;
+  --ink-muted: #55514b;
+  --rule: #d9d5cc;
+  --accent: #7a1f1f;
+
+  --font-reading: Georgia, "Times New Roman", serif;
+  --font-label: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+
+  --measure: 65ch;
+  --gutter: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #171614;
+    --ink: #f1eee8;
+    --ink-muted: #b5b0a6;
+    --rule: #3b3833;
+    --accent: #e39a92;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-reading);
+  font-size: 1.125rem;
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.15em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--gutter);
+  top: -4rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-label);
+  border: 2px solid var(--accent);
+}
+
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+.site-header,
+.site-footer,
+main {
+  max-width: var(--measure);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.site-header {
+  padding-block: 1.25rem 1rem;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-label);
+}
+
+.site-header .site-title {
+  margin: 0;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.site-header .site-term {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.9375rem;
+}
+
+main {
+  padding-block: 2rem;
+}
+
+.site-footer {
+  padding-block: 1rem 2rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-muted);
+  font-family: var(--font-label);
+  font-size: 0.9375rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 11pt;
+  }
+
+  .skip-link {
+    display: none;
+  }
+}

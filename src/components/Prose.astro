@@ -1,0 +1,18 @@
+---
+// Wraps text that comes from a content file: a reading guide, a lab sheet,
+// an assignment's description, the Charter.
+//
+// A content file can link to another page of the site by its path from the
+// site's home, for example [the Charter](/charter/). The base path
+// (/phil355) is added here, so the link keeps working if the site moves.
+import { linkFromHome } from "../lib/html";
+import { base } from "../lib/load-schedule";
+
+interface Props {
+  class?: string;
+}
+
+const html = linkFromHome(await Astro.slots.render("default"), base);
+---
+
+<div class:list={["prose", Astro.props.class]} set:html={html} />

@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { assignmentSchema, labSchema, readingSchema, sessionSchema } from "../src/content/schemas";
 import { weekday } from "../src/lib/dates";
+import { GUIDE_SECTIONS } from "../src/lib/guide";
 import { buildSchedule, ContentError } from "../src/lib/schedule";
 import { loadContract, loadPrompts, loadRawContent, parseFile } from "./helpers/content";
 
@@ -200,7 +201,9 @@ describe("bad content is refused", () => {
     const readings = raw.readings.map((r) => (r.slug === "winner" ? { ...r, hasGuide: true } : r));
     expect(() => buildSchedule({ ...raw, readings })).toThrow(/Reading "winner" has a guide but no pages, minutes, access/);
     const filled = raw.readings.map((r) =>
-      r.slug === "winner" ? { ...r, hasGuide: true, pages: 16, minutes: 60, access: "library" as const } : r,
+      r.slug === "winner"
+        ? { ...r, hasGuide: true, pages: 16, minutes: 60, access: "library" as const, guideHeadings: [...GUIDE_SECTIONS] }
+        : r,
     );
     expect(() => buildSchedule({ ...raw, readings: filled })).not.toThrow();
   });

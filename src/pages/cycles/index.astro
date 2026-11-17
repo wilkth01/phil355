@@ -1,0 +1,49 @@
+---
+// The nine cycles, grouped by unit.
+import Base from "../../layouts/Base.astro";
+import { formatRange } from "../../lib/dates";
+import { citation } from "../../lib/html";
+import { base, loadSchedule } from "../../lib/load-schedule";
+import { paths } from "../../lib/paths";
+import { site } from "../../site.config";
+
+const schedule = await loadSchedule();
+const units = [...new Set(schedule.cycles.map((c) => c.unit))];
+const session = (n: number) => schedule.sessions.find((s) => s.number === n)!;
+---
+
+<Base title="Cycles" description={`The nine reading cycles of ${site.title}, ${site.term}.`}>
+  <h1>Cycles</h1>
+  <p class="lede">
+    A cycle runs from a Thursday lab, through a weekend reading, to a Tuesday seminar. The Log closes it on Wednesday
+    night.
+  </p>
+
+  {
+    units.map((unit, i) => (
+      <section class="block" aria-labelledby={`unit-${i + 1}`}>
+        <h2 id={`unit-${i + 1}`}>{unit}</h2>
+        <ol class="cycle-list" data-dated>
+          {schedule.cycles
+            .filter((c) => c.unit === unit)
+            .map((c) => {
+              const core = schedule.readings[c.coreReading]!;
+              return (
+                <li data-date={session(c.seminarSession).date}>
+                  <p class="when">
+                    Cycle {c.number} · {formatRange(session(c.labSession).date, session(c.seminarSession).date)}
+                  </p>
+                  <p class="question">
+                    <a href={paths.cycle(base, c.number)}>{c.question}</a>
+                  </p>
+                  <p class="fine">
+                    Core reading: <span set:html={citation(core)} />
+                  </p>
+                </li>
+              );
+            })}
+        </ol>
+      </section>
+    ))
+  }
+</Base>

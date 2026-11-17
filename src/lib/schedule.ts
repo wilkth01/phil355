@@ -12,6 +12,7 @@ import type {
   TermData,
 } from "../content/schemas";
 import { addDays, mondayOf, weekday, weekdayName, type IsoDate } from "./dates";
+import { missingGuideSections } from "./guide";
 
 export interface Session {
   number: number;
@@ -33,6 +34,11 @@ export interface Session {
 export interface Reading extends ReadingData {
   slug: string;
   hasGuide: boolean;
+}
+
+/** An assignment as the pages need it: the file's fields plus its short name. */
+export interface Assignment extends AssignmentData {
+  slug: string;
 }
 
 export interface Cycle extends CycleData {
@@ -78,6 +84,7 @@ export interface Schedule {
   readings: Record<string, Reading>;
   cycles: Cycle[];
   labs: Lab[];
+  assignments: Assignment[];
   /** Everything handed in outside class, in date order. */
   due: DueItem[];
   keyDates: KeyDate[];
@@ -91,7 +98,8 @@ export interface Schedule {
 export interface RawContent {
   sessions: Array<SessionData & { html?: string }>;
   cycles: CycleData[];
-  readings: Array<ReadingData & { slug: string; hasGuide: boolean }>;
+  /** guideHeadings: the guide's section headings, when the caller has read the body. */
+  readings: Array<ReadingData & { slug: string; hasGuide: boolean; guideHeadings?: string[] }>;
   labs: LabData[];
   assignments: Array<AssignmentData & { slug: string }>;
   term: TermData;
@@ -142,7 +150,7 @@ export function buildSchedule(raw: RawContent): Schedule {
 
   // ---- Readings ----
   const readings: Record<string, Reading> = {};
-  for (const r of raw.readings) readings[r.slug] = r;
+  for (const { guideHeadings: _headings, ...r } of raw.readings) readings[r.slug] = r;
 
   // ---- Cycles ----
   const cycleNumbers = new Set(raw.cycles.map((c) => c.number));
@@ -179,6 +187,13 @@ export function buildSchedule(raw: RawContent): Schedule {
       const missing = (["pages", "minutes", "access"] as const).filter((field) => r[field] === null);
       if (missing.length > 0) {
         problems.push(`Reading "${r.slug}" has a guide but no ${missing.join(", ")}. Fill these in before the guide goes up.`);
+      }
+      // A core reading's guide has five fixed sections.
+      if (r.role === "core" && r.guideHeadings) {
+        const absent = missingGuideSections(r.guideHeadings);
+        if (absent.length > 0) {
+          problems.push(`Reading "${r.slug}": the guide is missing the section${absent.length > 1 ? "s" : ""} ${absent.map((h) => `"${h}"`).join(", ")}. Each needs its own "## " heading.`);
+        }
       }
     }
   }
@@ -220,6 +235,9 @@ export function buildSchedule(raw: RawContent): Schedule {
   // ---- Due dates ----
   const due: DueItem[] = [];
   for (const a of raw.assignments) {
+    for (const n of a.sessions ?? []) {
+      if (!sessionByNumber.has(n)) problems.push(`${a.title}: sessions lists ${n}, which is not a session.`);
+    }
     for (const d of a.dueDates ?? []) {
       if (a.slug === LOG_SLUG && weekday(d.date) !== raw.config.logDue.weekday) {
         problems.push(`${d.label} is due ${d.date}, a ${weekdayName(d.date)}; site.config.ts says Logs are due on day ${raw.config.logDue.weekday} of the week.`);
@@ -279,6 +297,7 @@ export function buildSchedule(raw: RawContent): Schedule {
     readings,
     cycles,
     labs,
+    assignments: [...raw.assignments],
     due,
     keyDates,
     weeks,

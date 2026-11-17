@@ -1,0 +1,238 @@
+---
+// The contract: the three tiers, and a self-check. A student types in
+// their own counts and sees where they stand against each tier. The counts
+// are kept in that browser only; nothing is sent anywhere.
+import Base from "../layouts/Base.astro";
+import { TIERS } from "../lib/contract";
+import { base, canvasLink, loadContract, loadSchedule } from "../lib/load-schedule";
+import { paths } from "../lib/paths";
+import { site } from "../site.config";
+
+const contract = loadContract();
+const schedule = await loadSchedule();
+const options = contract.tierOptions.options.map((slug) => ({
+  slug,
+  title: schedule.assignments.find((a) => a.slug === slug)?.title ?? slug,
+  exists: schedule.assignments.some((a) => a.slug === slug),
+}));
+const canvas = canvasLink();
+const payload = JSON.stringify({ contract, optionTitles: options.map((o) => o.title) }).replace(/</g, "\\u003c");
+---
+
+<Base title="The contract" description={`The grade contract for ${site.title}, ${site.term}: what each tier requires, and a private self-check.`} handout>
+  <h1>The contract</h1>
+  <p class="lede">
+    Your grade is set by which tier’s requirements you meet. The record that counts is kept in Canvas.{" "}
+    {canvas ? <a href={canvas}>Open Canvas</a> : "Canvas link coming."}
+  </p>
+
+  <div class="table-wrap">
+    <table class="contract-table">
+      <caption class="visually-hidden">What each tier requires</caption>
+      <thead>
+        <tr>
+          <th scope="col">Requirement</th>
+          {TIERS.map((t) => <th scope="col">{t}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">Absences allowed (of {contract.classMeetings} class meetings)</th>
+          {TIERS.map((t) => <td>{contract.absencesAllowed[t]}</td>)}
+        </tr>
+        <tr>
+          <th scope="row">Reading tickets passed (of {contract.readingTickets})</th>
+          {TIERS.map((t) => <td>{contract.ticketsPassed[t]}</td>)}
+        </tr>
+        <tr>
+          <th scope="row">Logs completed (of {contract.logs})</th>
+          {TIERS.map((t) => <td>{contract.logsCompleted[t]}</td>)}
+        </tr>
+        {
+          contract.requiredOfAll.map((label) => (
+            <tr>
+              <th scope="row">{label}</th>
+              {TIERS.map(() => <td>Required</td>)}
+            </tr>
+          ))
+        }
+        <tr>
+          <th scope="row">
+            {options.map((o, i) => (
+              <Fragment>
+                {i > 0 && "; "}
+                {o.exists ? <a href={paths.assignment(base, o.slug)}>{o.title}</a> : o.title}
+              </Fragment>
+            ))}
+          </th>
+          {TIERS.map((t) => <td>{contract.tierOptions.labels[t]}</td>)}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="block no-print" aria-labelledby="check-heading">
+    <h2 id="check-heading">Check where you stand</h2>
+    <p class="fine">
+      Enter your own counts. They are kept in this browser on this device and are not sent anywhere. This check is for
+      your own planning; it is not your record.
+    </p>
+    <noscript>
+      <p class="coming">The self-check needs JavaScript. The table above is the whole contract.</p>
+    </noscript>
+
+    <form id="contract-check" class="check-form" hidden>
+      <fieldset>
+        <legend>So far</legend>
+        <p class="field">
+          <label for="absences">Absences</label>
+          <input id="absences" name="absences" type="number" inputmode="numeric" min="0" max={contract.classMeetings} value="0" />
+        </p>
+        <p class="field">
+          <label for="ticketsPassed">Reading tickets passed</label>
+          <input id="ticketsPassed" name="ticketsPassed" type="number" inputmode="numeric" min="0" max={contract.readingTickets} value="0" />
+        </p>
+        <p class="field">
+          <label for="ticketsMissed">Reading tickets missed or not passed</label>
+          <input id="ticketsMissed" name="ticketsMissed" type="number" inputmode="numeric" min="0" max={contract.readingTickets} value="0" />
+        </p>
+        <p class="field">
+          <label for="logsDone">Logs completed</label>
+          <input id="logsDone" name="logsDone" type="number" inputmode="numeric" min="0" max={contract.logs} value="0" />
+        </p>
+        <p class="field">
+          <label for="logsMissed">Logs missed</label>
+          <input id="logsMissed" name="logsMissed" type="number" inputmode="numeric" min="0" max={contract.logs} value="0" />
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Done</legend>
+        {
+          contract.requiredOfAll.map((label, i) => (
+            <p class="check">
+              <input id={`required-${i}`} name="requiredDone" type="checkbox" value={i} />
+              <label for={`required-${i}`}>{label}</label>
+            </p>
+          ))
+        }
+        {
+          options.map((o, i) => (
+            <p class="check">
+              <input id={`option-${i}`} name="optionsDone" type="checkbox" value={i} />
+              <label for={`option-${i}`}>{o.title}</label>
+            </p>
+          ))
+        }
+      </fieldset>
+
+      <p>
+        <button type="reset" class="button button-quiet">Clear my counts</button>
+      </p>
+    </form>
+
+    <div class="check-result">
+      <p id="contract-headline" class="check-headline" role="status"></p>
+      <div id="contract-tiers"></div>
+    </div>
+  </section>
+
+  <script type="application/json" id="contract-data" set:html={payload} />
+
+  <script>
+    import type { ContractData } from "../content/schemas";
+    import { STATUS_WORDS, cleanCounts, emptyCounts, highestOpen, standing, type Counts } from "../lib/contract";
+    import { esc } from "../lib/html";
+
+    const STORAGE_KEY = "phil355:contract-check";
+    const form = document.getElementById("contract-check") as HTMLFormElement | null;
+    const headlineBox = document.getElementById("contract-headline");
+    const tiersBox = document.getElementById("contract-tiers");
+    const source = document.getElementById("contract-data");
+
+    function saved(): unknown {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+      } catch {
+        return null;
+      }
+    }
+
+    function save(counts: Counts | null) {
+      try {
+        if (counts) localStorage.setItem(STORAGE_KEY, JSON.stringify(counts));
+        else localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // Storage is unavailable; the check still works for this visit.
+      }
+    }
+
+    if (form && headlineBox && tiersBox && source?.textContent) {
+      const { contract, optionTitles } = JSON.parse(source.textContent) as { contract: ContractData; optionTitles: string[] };
+      const numbers = ["absences", "ticketsPassed", "ticketsMissed", "logsDone", "logsMissed"] as const;
+      const boxes = (name: string) => [...form.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`)];
+      const field = (name: string) => form.elements.namedItem(name) as HTMLInputElement;
+
+      const read = (): Counts =>
+        cleanCounts(contract, {
+          ...Object.fromEntries(numbers.map((n) => [n, field(n).value])),
+          requiredDone: boxes("requiredDone").map((b) => b.checked),
+          optionsDone: boxes("optionsDone").map((b) => b.checked),
+        });
+
+      const fill = (counts: Counts) => {
+        for (const n of numbers) field(n).value = String(counts[n]);
+        boxes("requiredDone").forEach((b, i) => (b.checked = counts.requiredDone[i] ?? false));
+        boxes("optionsDone").forEach((b, i) => (b.checked = counts.optionsDone[i] ?? false));
+      };
+
+      const draw = (counts: Counts) => {
+        const tiers = standing(contract, counts, optionTitles);
+        const top = highestOpen(tiers);
+        const headline = top
+          ? `The highest tier still open to you is ${top}.`
+          : "On these counts no tier’s requirements can still be met. Talk with Professor Wilk.";
+        // Only the headline is announced when it changes; the detail is there to read.
+        if (headlineBox.textContent !== headline) headlineBox.textContent = headline;
+        tiersBox.innerHTML = tiers
+            .map(
+              (t) => `
+<section class="tier tier-${t.status}" aria-label="${t.tier} tier">
+  <h3>${t.tier} tier <span class="status status-${t.status}">${esc(t.status === "ok" ? "Requirements met so far" : t.status === "todo" ? "Still open" : "Out of reach")}</span></h3>
+  <ul>
+    ${t.lines
+      .map(
+        (l) =>
+          `<li><span class="status status-${l.status}">${esc(STATUS_WORDS[l.status])}</span> <span class="due-label">${esc(l.label)}</span> <span class="fine">${esc(l.detail)}</span></li>`,
+      )
+      .join("\n    ")}
+  </ul>
+</section>`,
+            )
+            .join("");
+      };
+
+      fill(cleanCounts(contract, saved() as Parameters<typeof cleanCounts>[1]));
+      form.hidden = false;
+      draw(read());
+
+      form.addEventListener("submit", (event) => event.preventDefault());
+      form.addEventListener("input", () => {
+        const counts = read();
+        save(counts);
+        draw(counts);
+      });
+      // A number field is tidied when the student leaves it, not while they type.
+      form.addEventListener("change", () => fill(read()));
+      form.addEventListener("reset", () => {
+        // Runs before the fields clear; draw the empty state after they have.
+        setTimeout(() => {
+          const empty = emptyCounts(contract);
+          fill(empty);
+          save(null);
+          draw(empty);
+        });
+      });
+    }
+  </script>
+</Base>

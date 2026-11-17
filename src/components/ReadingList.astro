@@ -1,0 +1,33 @@
+---
+// A list of readings: role, citation linked to the reading's page, length,
+// and whether its guide is up.
+import { citationLink, guideStatus, readingLength, roleLabel } from "../lib/html";
+import { base } from "../lib/load-schedule";
+import type { Reading } from "../lib/schedule";
+
+interface Props {
+  readings: Reading[];
+  /** Leave out the role label, for a list that is all one role. */
+  hideRole?: boolean;
+}
+
+const { readings, hideRole = false } = Astro.props;
+---
+
+<ul class="reading-list">
+  {
+    readings.map((r) => {
+      const length = readingLength(r);
+      return (
+        <li>
+          {!hideRole && <span class="role">{roleLabel(r.role)}</span>}
+          <span class="citation" set:html={citationLink(r, base)} />
+          <span class="fine">
+            {length && `${length} · `}
+            {guideStatus(r)}
+          </span>
+        </li>
+      );
+    })
+  }
+</ul>

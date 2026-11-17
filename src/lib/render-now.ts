@@ -3,8 +3,9 @@
 // browser with today's date.
 
 import { addDays, daysBetween, formatFull, formatLong, formatMonthDay, formatRange, formatShort, type IsoDate } from "./dates";
-import { aiMarker, citation, dueLabel, dueTime, esc, kindLabel, readingLength, roleLabel } from "./html";
+import { aiMarker, citationLink, dueLabel, dueTime, esc, guideStatus, kindLabel, link, readingLength, roleLabel } from "./html";
 import type { NowModel } from "./now";
+import { paths } from "./paths";
 import type { DueItem, Session } from "./schedule";
 
 export interface RenderContext {
@@ -29,7 +30,15 @@ function joinDates(dates: IsoDate[], word: string): string {
   return `${names.slice(0, -1).join(", ")} ${word} ${names[names.length - 1]}`;
 }
 
-function sessionCard(model: NowModel, s: Session, heading: string): string {
+/** Links from a session to its lab page and its cycle page. */
+function sessionLinks(s: Session, ctx: RenderContext): string {
+  const links: string[] = [];
+  if (s.lab !== undefined) links.push(link(paths.lab(ctx.base, s.lab), `Lab ${s.lab} page`));
+  if (s.cycle !== undefined) links.push(link(paths.cycle(ctx.base, s.cycle), `Cycle ${s.cycle}`));
+  return links.length > 0 ? `<p class="session-links">${links.join(" · ")}</p>` : "";
+}
+
+function sessionCard(model: NowModel, s: Session, heading: string, ctx: RenderContext): string {
   const notes: string[] = [];
   if (s.ticket) notes.push("A reading ticket is taken at the start.");
   if (model.nextLab && s.lab === model.nextLab.number && model.today < model.nextLab.revealOn) {
@@ -46,23 +55,26 @@ function sessionCard(model: NowModel, s: Session, heading: string): string {
     <p class="session-meta">Session ${s.number} · ${esc(kindLabel(s.kind))} ${aiMarker(s.ai)}</p>
     ${notes.map((n) => `<p class="session-note">${n}</p>`).join("\n    ")}
     ${s.html ? `<div class="session-body">${s.html}</div>` : ""}
+    ${sessionLinks(s, ctx)}
   </div>
 </section>`;
 }
 
-function openQuestionBlock(model: NowModel): string {
+function openQuestionBlock(model: NowModel, ctx: RenderContext): string {
   const q = model.openQuestion;
   if (!q) return "";
-  const labName = q.lab ? `Lab ${q.lab.number}, ${q.lab.title}` : q.labSession.title;
+  const labName = q.lab
+    ? link(paths.lab(ctx.base, q.lab.number), esc(`Lab ${q.lab.number}, ${q.lab.title}`))
+    : esc(q.labSession.title);
   return `
 <section class="now-block" aria-labelledby="open-heading">
   <h2 id="open-heading">Left open by ${esc(formatLong(q.labSession.date).split(",")[0]!)}’s lab</h2>
-  <p class="question">${esc(q.cycle.question)}</p>
-  <p class="fine">${esc(labName)}. The seminar takes it up on ${esc(formatLong(q.seminar.date))}.</p>
+  <p class="question">${link(paths.cycle(ctx.base, q.cycle.number), esc(q.cycle.question))}</p>
+  <p class="fine">${labName}. The seminar takes it up on ${esc(formatLong(q.seminar.date))}.</p>
 </section>`;
 }
 
-function readingBlock(model: NowModel): string {
+function readingBlock(model: NowModel, ctx: RenderContext): string {
   if (model.phase === "before") return "";
   const r = model.reading;
   if (!r) {
@@ -77,13 +89,13 @@ function readingBlock(model: NowModel): string {
       const length = readingLength(reading);
       return `<li>
       <span class="role">${esc(roleLabel(reading.role))}</span>
-      <span class="citation">${citation(reading)}</span>
-      <span class="fine">${length ? `${esc(length)} · ` : ""}${reading.hasGuide ? "Reading guide available" : "Guide coming"}</span>
+      <span class="citation">${citationLink(reading, ctx.base)}</span>
+      <span class="fine">${length ? `${esc(length)} · ` : ""}${guideStatus(reading)}</span>
     </li>`;
     })
     .join("\n    ");
   const why = r.cycle
-    ? `<p class="fine">For the seminar on the question: ${esc(r.cycle.question)}</p>`
+    ? `<p class="fine">For the seminar on the question: ${link(paths.cycle(ctx.base, r.cycle.number), esc(r.cycle.question))}</p>`
     : `<p class="fine">For: ${esc(r.session.title)}</p>`;
   return `
 <section class="now-block" aria-labelledby="read-heading">
@@ -95,10 +107,10 @@ function readingBlock(model: NowModel): string {
 </section>`;
 }
 
-function dueItem(d: DueItem, withDate: boolean): string {
+function dueItem(d: DueItem, withDate: boolean, ctx: RenderContext): string {
   const when = withDate ? ` <span class="due-when">${esc(formatLong(d.date))}${esc(dueTime(d))}</span>` : "";
   const note = d.note ? ` <span class="fine">${esc(d.note)}</span>` : "";
-  return `<li><span class="due-label">${esc(dueLabel(d))}</span>${when}${note}</li>`;
+  return `<li><span class="due-label">${link(paths.assignment(ctx.base, d.assignment), esc(dueLabel(d)))}</span>${when}${note}</li>`;
 }
 
 function dueBlock(model: NowModel, ctx: RenderContext): string {
@@ -129,7 +141,7 @@ function dueBlock(model: NowModel, ctx: RenderContext): string {
   <h2 id="due-heading">${esc(heading)}</h2>
   ${lead}
   <ul class="due-list">
-    ${model.due.map((d) => dueItem(d, !sameDay)).join("\n    ")}
+    ${model.due.map((d) => dueItem(d, !sameDay, ctx)).join("\n    ")}
   </ul>
   ${canvas}
 </section>`;
@@ -143,7 +155,7 @@ function aheadBlock(model: NowModel, ctx: RenderContext): string {
         ...day.sessions.map(
           (s) => `<li><span class="kind">${esc(kindLabel(s.kind))}</span> ${esc(s.title)} ${aiMarker(s.ai)}</li>`,
         ),
-        ...day.due.map((d) => `<li><span class="kind">Due</span> ${esc(dueLabel(d))}${esc(dueTime(d))}</li>`),
+        ...day.due.map((d) => `<li><span class="kind">Due</span> ${link(paths.assignment(ctx.base, d.assignment), esc(dueLabel(d)))}${esc(dueTime(d))}</li>`),
         ...day.keyDates.map((k) => `<li><span class="kind">Note</span> ${esc(k.label)}${k.end !== k.start ? `, ${esc(formatRange(k.start, k.end))}` : ""}</li>`),
       ];
       return `<div class="ahead-day">
@@ -234,9 +246,9 @@ ${scheduleLink(ctx)}`;
   return `
 <h1>${esc(heading)}</h1>
 <p class="lede">${esc(lede)}</p>
-${sessionCard(model, next, nextHeading)}
-${openQuestionBlock(model)}
-${readingBlock(model)}
+${sessionCard(model, next, nextHeading, ctx)}
+${openQuestionBlock(model, ctx)}
+${readingBlock(model, ctx)}
 ${dueBlock(model, ctx)}
 ${aheadBlock(model, ctx)}`;
 }

@@ -1,0 +1,182 @@
+---
+// The Charter: the current text, then each version beside the one before
+// it with the changes marked, then the earlier texts in full.
+//
+// A version is one file in src/content/charter/. The page puts them in
+// order by version number.
+import { getCollection, render } from "astro:content";
+import Prose from "../components/Prose.astro";
+import Base from "../layouts/Base.astro";
+import { formatFull, formatLong } from "../lib/dates";
+import { countChanges, diffText, type Block, type Piece } from "../lib/diff";
+import { esc } from "../lib/html";
+import { base, loadSchedule } from "../lib/load-schedule";
+import { paths } from "../lib/paths";
+import { site } from "../site.config";
+
+const schedule = await loadSchedule();
+const entries = (await getCollection("charter")).sort((a, b) => a.data.version - b.data.version);
+const versions = await Promise.all(
+  entries.map(async (entry) => ({ ...entry.data, body: entry.body ?? "", Content: (await render(entry)).Content })),
+);
+const latest = versions[versions.length - 1];
+const assignment = schedule.assignments.find((a) => a.slug === "charter");
+const milestones = (assignment?.dueDates ?? []).filter((d) => d.inClass);
+
+const STATUS_WORDS = { draft: "Draft", amended: "Amended", ratified: "Ratified" } as const;
+const name = (v: { version: number; status: keyof typeof STATUS_WORDS; date: string }) =>
+  `Version ${v.version} · ${STATUS_WORDS[v.status]} ${formatLong(v.date)}`;
+
+// Newest comparison first.
+const comparisons = versions
+  .slice(1)
+  .map((v, i) => ({ after: v, before: versions[i]!, rows: diffText(versions[i]!.body, v.body) }))
+  .reverse();
+
+function pieces(list: Piece[]): string {
+  return list
+    .map((p) => {
+      if (p.change === "added") return `<ins><span class="visually-hidden">Added: </span>${esc(p.text)}</ins>`;
+      if (p.change === "removed") return `<del><span class="visually-hidden">Removed: </span>${esc(p.text)}</del>`;
+      return esc(p.text);
+    })
+    .join(" ");
+}
+
+function count(n: number, word: string): string {
+  return `${n} ${word}`;
+}
+
+const blockClass = (type: Block["type"]) => `diff-${type}`;
+---
+
+<Base title="The Charter" description={`The class Charter for AI use in ${site.title}, ${site.term}: every version, with changes marked.`} handout>
+  <h1>The Charter</h1>
+  <p class="lede">
+    The class’s own rules for AI use, written inside limits the instructor reserves.
+    {assignment && (
+      <Fragment>
+        {" "}
+        <a class="no-print" href={paths.assignment(base, "charter")}>How the Charter is made</a>
+      </Fragment>
+    )}
+  </p>
+
+  {
+    milestones.length > 0 && (
+      <ol class="timeline no-print" data-dated>
+        {milestones.map((d) => (
+          <li data-date={d.date}>
+            <p class="when">{formatLong(d.date)}</p>
+            <p>{d.label} in class</p>
+          </li>
+        ))}
+      </ol>
+    )
+  }
+
+  {
+    !latest && (
+      <section class="block" aria-labelledby="current-heading">
+        <h2 id="current-heading">The text</h2>
+        <p class="coming">
+          No version is posted yet.
+          {milestones[0] && ` The first draft is written in class on ${formatFull(milestones[0].date)} and posted here afterward.`}
+        </p>
+      </section>
+    )
+  }
+
+  {
+    latest && (
+      <section class="block" aria-labelledby="current-heading">
+        <h2 id="current-heading">The current text</h2>
+        <p class="fine">{name(latest)}</p>
+        <p class="no-print">
+          <button type="button" class="button button-quiet" data-print hidden>Print the current text</button>
+        </p>
+        <Prose class="charter-text">
+          <latest.Content />
+        </Prose>
+      </section>
+    )
+  }
+
+  {
+    comparisons.map(({ before, after, rows }) => {
+      const n = countChanges(rows);
+      const summary = [
+        n.changed > 0 && count(n.changed, "reworded"),
+        n.added > 0 && count(n.added, "added"),
+        n.removed > 0 && count(n.removed, "removed"),
+      ].filter(Boolean);
+      return (
+        <section class="block changes no-print" aria-labelledby={`changes-${after.version}`}>
+          <h2 id={`changes-${after.version}`}>
+            What changed from version {before.version} to version {after.version}
+          </h2>
+          <p class="fine">
+            {summary.length > 0 ? `Passages: ${summary.join(", ")}.` : "The text is the same."} Added words are underlined
+            and marked “added”; removed words are struck through and marked “removed.”
+          </p>
+          <div class="diff">
+            <p class="diff-col-head diff-before" aria-hidden="true">
+              {name(before)}
+            </p>
+            <p class="diff-col-head diff-after" aria-hidden="true">
+              {name(after)}
+            </p>
+            {rows.map((row) => {
+              if (row.kind === "same") {
+                return <p class:list={["diff-same", blockClass(row.block.type)]}>{row.block.text}</p>;
+              }
+              if (row.kind === "changed") {
+                return (
+                  <Fragment>
+                    <p class:list={["diff-before", blockClass(row.type)]}>
+                      <span class="diff-tag">Before</span> <Fragment set:html={pieces(row.before)} />
+                    </p>
+                    <p class:list={["diff-after", blockClass(row.type)]}>
+                      <span class="diff-tag">After</span> <Fragment set:html={pieces(row.after)} />
+                    </p>
+                  </Fragment>
+                );
+              }
+              if (row.kind === "removed") {
+                return (
+                  <p class:list={["diff-before", "diff-only", blockClass(row.block.type)]}>
+                    <span class="diff-tag">Removed</span> <del>{row.block.text}</del>
+                  </p>
+                );
+              }
+              return (
+                <p class:list={["diff-after", "diff-only", blockClass(row.block.type)]}>
+                  <span class="diff-tag">Added</span> <ins>{row.block.text}</ins>
+                </p>
+              );
+            })}
+          </div>
+        </section>
+      );
+    })
+  }
+
+  {
+    versions.length > 1 && (
+      <section class="block no-print" aria-labelledby="earlier-heading">
+        <h2 id="earlier-heading">Earlier versions in full</h2>
+        {versions
+          .slice(0, -1)
+          .reverse()
+          .map((v) => (
+            <details class="earlier">
+              <summary>{name(v)}</summary>
+              <Prose class="charter-text">
+                <v.Content />
+              </Prose>
+            </details>
+          ))}
+      </section>
+    )
+  }
+</Base>

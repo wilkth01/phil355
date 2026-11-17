@@ -8,6 +8,7 @@ import { parse } from "yaml";
 import type { z } from "astro/zod";
 import {
   assignmentSchema,
+  botSchema,
   contractSchema,
   cycleSchema,
   labSchema,
@@ -16,6 +17,7 @@ import {
   sessionSchema,
   termSchema,
 } from "../../src/content/schemas";
+import { sectionHeadings } from "../../src/lib/guide";
 import type { RawContent } from "../../src/lib/schedule";
 import { site } from "../../src/site.config";
 
@@ -52,6 +54,7 @@ export function loadRawContent(): RawContent {
       ...e.data,
       slug: e.id,
       hasGuide: e.body.trim().length > 0,
+      guideHeadings: sectionHeadings(e.body),
     })),
     labs: readCollection("labs", labSchema).map((e) => e.data),
     assignments: readCollection("assignments", assignmentSchema).map((e) => ({ ...e.data, slug: e.id })),
@@ -62,3 +65,4 @@ export function loadRawContent(): RawContent {
 
 export const loadContract = () => contractSchema.parse(readJson("contract.json"));
 export const loadPrompts = () => promptsSchema.parse(readJson("prompts.json"));
+export const loadBot = () => botSchema.parse(readJson("bot.json"));

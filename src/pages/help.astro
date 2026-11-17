@@ -1,0 +1,68 @@
+---
+// Where to get help: the instructor, and the university's support
+// services. The instructor's details come from src/site.config.ts; the
+// rest is src/content/pages/help.md.
+import { getEntry, render } from "astro:content";
+import Prose from "../components/Prose.astro";
+import Base from "../layouts/Base.astro";
+import { base } from "../lib/load-schedule";
+import { paths } from "../lib/paths";
+import { site } from "../site.config";
+
+const page = await getEntry("pages", "help");
+const Content = page ? (await render(page)).Content : null;
+const hasBotLink = site.botUrl.trim() !== "";
+---
+
+<Base title={page?.data.title ?? "Help"} description={`Office hours, contact details and support services for ${site.title}, ${site.term}.`}>
+  <h1>{page?.data.title ?? "Help"}</h1>
+
+  <section class="block" aria-labelledby="instructor-heading">
+    <h2 id="instructor-heading">Your instructor</h2>
+    <dl class="facts">
+      <div>
+        <dt>Name</dt>
+        <dd>{site.instructor.name}</dd>
+      </div>
+      <div>
+        <dt>Email</dt>
+        <dd>
+          <a href={`mailto:${site.instructor.email}`}>{site.instructor.email}</a>
+        </dd>
+      </div>
+      <div>
+        <dt>Office</dt>
+        <dd>{site.instructor.office}</dd>
+      </div>
+    </dl>
+  </section>
+
+  {
+    Content ? (
+      <Prose>
+        <Content />
+      </Prose>
+    ) : (
+      <p class="coming">Office hours and support services are coming.</p>
+    )
+  }
+
+  <section class="block" aria-labelledby="thinking-heading">
+    <h2 id="thinking-heading">Help with the thinking</h2>
+    <p>
+      The {site.botName} asks you questions about a reading or a case. It does not write for you.{" "}
+      {
+        hasBotLink ? (
+          <a href={site.botUrl} target="_blank" rel="noopener noreferrer" data-keep-href>
+            Open the {site.botName} (BoodleBox, new tab)
+          </a>
+        ) : (
+          <span class="link-coming">The link to it is coming.</span>
+        )
+      }
+    </p>
+    <p>
+      <a href={paths.ai(base)}>What you may use AI for</a>
+    </p>
+  </section>
+</Base>

@@ -1,0 +1,122 @@
+---
+// One cycle on one page, in the order it happens: Thursday's lab, the
+// weekend's reading, Tuesday's seminar, Wednesday's Log.
+import { getCollection } from "astro:content";
+import AskBot from "../../components/AskBot.astro";
+import ReadingList from "../../components/ReadingList.astro";
+import Base from "../../layouts/Base.astro";
+import { READING_RULE, courseCode, cycleContext, cycleStarters } from "../../lib/bot";
+import { addDays, daysBetween, formatLong } from "../../lib/dates";
+import { aiMarker, dueLabel, dueTime } from "../../lib/html";
+import { base, loadSchedule } from "../../lib/load-schedule";
+import { paths } from "../../lib/paths";
+import { site } from "../../site.config";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("cycles");
+  return entries.map((entry) => ({ params: { n: String(entry.data.number) } }));
+}
+
+const schedule = await loadSchedule();
+const cycle = schedule.cycles.find((c) => String(c.number) === Astro.params.n)!;
+const labSession = schedule.sessions.find((s) => s.number === cycle.labSession)!;
+const seminar = schedule.sessions.find((s) => s.number === cycle.seminarSession)!;
+const lab = schedule.labs.find((l) => l.session === labSession.number);
+const core = schedule.readings[cycle.coreReading];
+const assigned = [cycle.coreReading, ...cycle.alsoAssigned].map((slug) => schedule.readings[slug]!);
+const optional = cycle.optional.map((slug) => schedule.readings[slug]!);
+const has = (slug: string) => schedule.assignments.some((a) => a.slug === slug);
+
+// The Log that closes the cycle: the first one due after the seminar, within the week.
+const log = schedule.due.find(
+  (d) => d.assignment === "log" && d.date > seminar.date && daysBetween(seminar.date, d.date) <= 7,
+);
+
+const previous = schedule.cycles.find((c) => c.number === cycle.number - 1);
+const next = schedule.cycles.find((c) => c.number === cycle.number + 1);
+---
+
+<Base title={`Cycle ${cycle.number}: ${cycle.question}`} description={`Cycle ${cycle.number} of ${site.title}: ${cycle.question}`}>
+  <article class="cycle">
+    <p class="kicker">
+      <span class="role">{cycle.unit}</span>
+    </p>
+    <h1>Cycle {cycle.number}</h1>
+    <p class="question big">{cycle.question}</p>
+
+    <ol class="steps" data-dated>
+      <li class="step" data-date={labSession.date}>
+        <p class="when">{formatLong(labSession.date)}</p>
+        <h2>
+          The lab <Fragment set:html={aiMarker(labSession.ai)} />
+        </h2>
+        <p>
+          {lab ? <a href={paths.lab(base, lab.number)}>Lab {lab.number}: {lab.title}</a> : labSession.title}. No
+          preparation needed. The lab ends with the question the reading takes up.
+        </p>
+      </li>
+
+      <li class="step" data-date={addDays(seminar.date, -1)}>
+        <p class="when">Before {formatLong(seminar.date)}</p>
+        <h2>The reading</h2>
+        <ReadingList readings={assigned} />
+        {
+          optional.length > 0 && (
+            <Fragment>
+              <h3 class="minor">Optional</h3>
+              <ReadingList readings={optional} hideRole />
+            </Fragment>
+          )
+        }
+        <p class="fine">Take notes by hand. Handwritten notes can be used on Tuesday’s reading ticket.</p>
+      </li>
+
+      <li class="step" data-date={seminar.date}>
+        <p class="when">{formatLong(seminar.date)}</p>
+        <h2>
+          The seminar <Fragment set:html={aiMarker(seminar.ai)} />
+        </h2>
+        <p>{seminar.title}</p>
+        {
+          seminar.ticket && (
+            <p class="fine">
+              Opens with a{" "}
+              {has("reading-ticket") ? <a href={paths.assignment(base, "reading-ticket")}>reading ticket</a> : "reading ticket"}{" "}
+              on the core reading.{" "}
+              {has("four-minute-case") && (
+                <Fragment>
+                  Then a <a href={paths.assignment(base, "four-minute-case")}>four-minute case</a>.{" "}
+                </Fragment>
+              )}
+              Laptops closed.
+            </p>
+          )
+        }
+      </li>
+
+      {
+        log && (
+          <li class="step" data-date={log.date}>
+            <p class="when">
+              {formatLong(log.date)}
+              {dueTime(log)}
+            </p>
+            <h2>The Log</h2>
+            <p>
+              <a href={paths.assignment(base, log.assignment)}>{dueLabel(log)}</a> is due.
+              {log.note && ` ${log.note}.`}
+            </p>
+          </li>
+        )
+      }
+    </ol>
+
+    <nav class="pager" aria-label="Other cycles">
+      {previous ? <a href={paths.cycle(base, previous.number)} rel="prev">← Cycle {previous.number}</a> : <span />}
+      <a href={paths.cycles(base)}>All cycles</a>
+      {next ? <a href={paths.cycle(base, next.number)} rel="next">Cycle {next.number} →</a> : <span />}
+    </nav>
+  </article>
+
+  <AskBot context={cycleContext(courseCode(site.title), cycle, core)} starters={cycleStarters(cycle)} rule={READING_RULE} />
+</Base>

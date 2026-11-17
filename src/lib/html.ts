@@ -1,8 +1,9 @@
 // Small pieces of HTML shared by the pages built ahead of time and the
 // home page, which redraws itself in the browser for today's date.
 
-import type { DueItem, Reading, Session } from "./schedule";
+import type { Assignment, DueItem, Reading, Session } from "./schedule";
 import { formatTime } from "./dates";
+import { paths } from "./paths";
 
 export function esc(value: unknown): string {
   return String(value)
@@ -43,6 +44,54 @@ export function roleLabel(role: Reading["role"]): string {
 /** The AI on / AI off marker. Always in words; color only reinforces it. */
 export function aiMarker(ai: "on" | "off"): string {
   return `<span class="ai ai-${ai}">AI ${ai}</span>`;
+}
+
+const RULE_WORDS: Record<Assignment["aiRule"], string> = {
+  open: "AI open",
+  closed: "AI closed",
+  required: "AI required",
+  mixed: "AI open, then closed",
+  none: "",
+};
+
+/** The same marker for an assignment's rule: AI open, AI closed, AI required. */
+export function aiRuleMarker(rule: Assignment["aiRule"]): string {
+  const words = RULE_WORDS[rule];
+  if (!words) return "";
+  // Closed work is drawn like "AI off"; everything else like "AI on".
+  return `<span class="ai ai-${rule === "closed" ? "off" : "on"} ai-rule-${rule}">${words}</span>`;
+}
+
+/**
+ * In HTML made from a content file, turns a link written from the site's
+ * home, such as href="/charter/", into one that includes the base path.
+ */
+export function linkFromHome(html: string, base: string): string {
+  return html.replace(/href="\/(?!\/)([^"]*)"/g, (whole, rest: string) =>
+    `/${rest}`.startsWith(base) ? whole : `href="${base}${rest}"`,
+  );
+}
+
+export function link(href: string, html: string): string {
+  return `<a href="${esc(href)}">${html}</a>`;
+}
+
+/** A reading's citation, linked to its page. */
+export function citationLink(r: Reading, base: string): string {
+  return link(paths.reading(base, r.slug), citation(r));
+}
+
+/** A reading's title alone, set as its kind of work asks: “Article,” <cite>Book</cite>, Packet. */
+export function readingTitle(r: Reading): string {
+  if (r.title === null) return r.author ? esc(r.author) : "";
+  if (r.work === "book") return `<cite>${esc(r.title)}</cite>`;
+  if (r.work === "packet") return esc(r.title);
+  return `“${esc(r.title)}”`;
+}
+
+/** "Reading guide available", or what stands in for it. */
+export function guideStatus(r: Reading): string {
+  return r.hasGuide ? "Reading guide available" : "Guide coming";
 }
 
 /**

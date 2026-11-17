@@ -1,0 +1,57 @@
+---
+// The syllabus as a page, with a print style. The text is
+// src/content/pages/syllabus.md. Until that file exists, the page says the
+// syllabus is coming and points to the parts of it that are already here.
+import { getEntry, render } from "astro:content";
+import Prose from "../components/Prose.astro";
+import Base from "../layouts/Base.astro";
+import { base } from "../lib/load-schedule";
+import { paths } from "../lib/paths";
+import { site } from "../site.config";
+
+const page = await getEntry("pages", "syllabus");
+const Content = page ? (await render(page)).Content : null;
+---
+
+<Base title={page?.data.title ?? "Syllabus"} description={`The syllabus for ${site.title}, ${site.term}.`} handout>
+  <h1>{page?.data.title ?? "Syllabus"}</h1>
+  <p class="lede">
+    {site.title}, {site.term}. {site.instructor.name}, {site.instructor.office},{" "}
+    <a href={`mailto:${site.instructor.email}`}>{site.instructor.email}</a>
+  </p>
+
+  {
+    Content ? (
+      <Fragment>
+        <p class="no-print">
+          <button type="button" class="button button-quiet" data-print hidden>Print the syllabus</button>
+        </p>
+        <Prose>
+          <Content />
+        </Prose>
+      </Fragment>
+    ) : (
+      <Fragment>
+        <p class="coming">The syllabus is coming.</p>
+        <p>Until it is posted, these pages cover the same ground:</p>
+        <ul>
+          <li>
+            <a href={paths.schedule(base)}>The schedule</a>: every session, reading and due date
+          </li>
+          <li>
+            <a href={paths.assignments(base)}>Assignments</a>: how each piece of work runs
+          </li>
+          <li>
+            <a href={paths.contract(base)}>The contract</a>: what each grade tier requires
+          </li>
+          <li>
+            <a href={paths.ai(base)}>AI rules</a>: what you may use AI for
+          </li>
+          <li>
+            <a href={paths.help(base)}>Help</a>: office hours and support services
+          </li>
+        </ul>
+      </Fragment>
+    )
+  }
+</Base>

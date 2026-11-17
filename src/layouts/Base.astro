@@ -1,14 +1,18 @@
 ---
 import "../styles/global.css";
+import Fonts from "../components/Fonts.astro";
+import { paths } from "../lib/paths";
 import { site } from "../site.config";
 
 interface Props {
   /** Page name shown before the site title in the browser tab. Omit on the home page. */
   title?: string;
   description?: string;
+  /** True on pages meant to be printed as a handout: reading guides, lab sheets, assignments, the syllabus. */
+  handout?: boolean;
 }
 
-const { title, description } = Astro.props;
+const { title, description, handout = false } = Astro.props;
 const pageTitle = title ? `${title} · ${site.title}` : site.title;
 
 // import.meta.env.BASE_URL may or may not end in a slash; make it end in one.
@@ -16,9 +20,22 @@ const home = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 
 const nav = [
   { href: home, label: "Now" },
-  { href: `${home}schedule/`, label: "Schedule" },
+  { href: paths.schedule(home), label: "Schedule" },
+  { href: paths.cycles(home), label: "Cycles" },
+  { href: paths.assignments(home), label: "Assignments" },
+  { href: paths.contract(home), label: "Contract" },
+  { href: paths.ai(home), label: "AI rules" },
+  { href: paths.help(home), label: "Help" },
+];
+const more = [
+  { href: paths.readings(home), label: "Readings" },
+  { href: paths.labs(home), label: "Labs" },
+  { href: paths.charter(home), label: "Charter" },
+  { href: paths.syllabus(home), label: "Syllabus" },
 ];
 const here = Astro.url.pathname.replace(/\/?$/, "/");
+// A section's link stays marked on the pages beneath it.
+const current = (href: string) => (href === home ? here === home : here.startsWith(href));
 ---
 
 <!doctype html>
@@ -29,8 +46,9 @@ const here = Astro.url.pathname.replace(/\/?$/, "/");
     <title>{pageTitle}</title>
     {description && <meta name="description" content={description} />}
     <meta name="color-scheme" content="light dark" />
+    <Fonts />
   </head>
-  <body>
+  <body class:list={{ handout }}>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div>
@@ -42,7 +60,7 @@ const here = Astro.url.pathname.replace(/\/?$/, "/");
           {
             nav.map((item) => (
               <li>
-                <a href={item.href} aria-current={item.href === here ? "page" : undefined}>
+                <a href={item.href} aria-current={current(item.href) ? "page" : undefined}>
                   {item.label}
                 </a>
               </li>
@@ -56,6 +74,19 @@ const here = Astro.url.pathname.replace(/\/?$/, "/");
       <slot />
     </main>
     <footer class="site-footer">
+      <nav aria-label="More pages">
+        <ul>
+          {
+            more.map((item) => (
+              <li>
+                <a href={item.href} aria-current={current(item.href) ? "page" : undefined}>
+                  {item.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
       <p>
         {site.instructor.name}, {site.instructor.office}{" "}·{" "}<a href={`mailto:${site.instructor.email}`}>{site.instructor.email}</a>
       </p>
@@ -99,6 +130,29 @@ const here = Astro.url.pathname.replace(/\/?$/, "/");
           },
           true,
         );
+      }
+
+      // In a list of dated items, mark the next one and mute the ones gone by.
+      for (const list of document.querySelectorAll<HTMLElement>("[data-dated]")) {
+        let marked = false;
+        for (const item of list.querySelectorAll<HTMLElement>("[data-date]")) {
+          const date = item.dataset.date ?? "";
+          if (date < clock.today) {
+            item.classList.add("is-past");
+          } else if (!marked) {
+            marked = true;
+            const badge = document.createElement("span");
+            badge.className = "next-badge";
+            badge.textContent = date === clock.today ? "Today" : "Next";
+            (item.querySelector(".when") ?? item).append(" ", badge);
+          }
+        }
+      }
+
+      // Print buttons.
+      for (const button of document.querySelectorAll<HTMLButtonElement>("[data-print]")) {
+        button.hidden = false;
+        button.addEventListener("click", () => window.print());
       }
     </script>
   </body>

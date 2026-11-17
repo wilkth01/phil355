@@ -1,0 +1,28 @@
+---
+// The site's two typefaces, served from the site itself: Source Serif 4
+// for reading and Source Sans 3 for labels and controls. Both are under
+// the SIL Open Font License. Only the Latin subset is shipped; anything
+// outside it falls back to the system font.
+//
+// To change typefaces, replace these three files and the two family names
+// in src/styles/global.css.
+import serif from "@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2?url";
+import serifItalic from "@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-italic.woff2?url";
+import sans from "@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2?url";
+
+const latin =
+  "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD";
+
+const face = (family: string, style: string, weights: string, url: string) =>
+  `@font-face{font-family:"${family}";font-style:${style};font-weight:${weights};font-display:swap;src:url("${url}") format("woff2");unicode-range:${latin}}`;
+
+const css = [
+  face("Source Serif 4", "normal", "200 900", serif),
+  face("Source Serif 4", "italic", "200 900", serifItalic),
+  face("Source Sans 3", "normal", "200 900", sans),
+].join("");
+---
+
+<link rel="preload" as="font" type="font/woff2" href={serif} crossorigin />
+<link rel="preload" as="font" type="font/woff2" href={sans} crossorigin />
+<style is:inline set:html={css} />

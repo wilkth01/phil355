@@ -1,0 +1,131 @@
+---
+// One page per lab: the lab sheet and, where there is one, the lab's tool.
+// Before the lab's revealOn date the page shows only the title and "no
+// preparation needed". The page is drawn for the build date and then
+// corrected in the browser for today's date.
+import { getCollection, render } from "astro:content";
+import AskBot from "../../components/AskBot.astro";
+import Prose from "../../components/Prose.astro";
+import Base from "../../layouts/Base.astro";
+import { LAB_RULE, courseCode, labContext, labStarters } from "../../lib/bot";
+import { formatLong } from "../../lib/dates";
+import { aiMarker } from "../../lib/html";
+import { base, buildDate, loadSchedule } from "../../lib/load-schedule";
+import { paths } from "../../lib/paths";
+import { site } from "../../site.config";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("labs");
+  return entries.map((entry) => ({ params: { n: String(entry.data.number) }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const schedule = await loadSchedule();
+const lab = schedule.labs.find((l) => l.number === entry.data.number)!;
+const session = schedule.sessions.find((s) => s.number === lab.session)!;
+const cycle = schedule.cycles.find((c) => c.labSession === lab.session);
+const hasSheet = (entry.body ?? "").trim().length > 0;
+const { Content } = await render(entry);
+const revealed = buildDate() >= lab.revealOn;
+
+const TOOL_NAMES = {
+  "next-word": "the next-word exercise",
+  footprint: "the footprint estimator",
+  calibration: "the calibration betting sheet",
+  sample: "the sample experiment",
+  labeling: "the labeling queue",
+  fairness: "the fairness machine",
+} as const;
+
+const previous = schedule.labs.find((l) => l.number === lab.number - 1);
+const next = schedule.labs.find((l) => l.number === lab.number + 1);
+---
+
+<Base title={`Lab ${lab.number}: ${lab.title}`} description={`Lab ${lab.number} of ${site.title}: ${lab.title}.`} handout>
+  <article class="lab">
+    <p class="kicker">
+      <span class="role">Lab {lab.number}</span>
+    </p>
+    <h1>{lab.title}</h1>
+    <p class="session-meta">
+      {formatLong(session.date)} · Session {session.number} <Fragment set:html={aiMarker(session.ai)} />
+    </p>
+    {session.bring && <p class="session-note">Bring: {session.bring}</p>}
+
+    <div id="lab-wait" hidden={revealed}>
+      <p class="coming">No preparation needed.</p>
+      <p class="fine">The lab sheet appears here on {formatLong(lab.revealOn)}.</p>
+    </div>
+
+    <div id="lab-detail" data-reveal-on={lab.revealOn} hidden={!revealed}>
+      <p class="no-print">
+        <button type="button" class="button button-quiet" data-print hidden>Print this page</button>
+      </p>
+
+      <section aria-labelledby="sheet-heading">
+        <h2 id="sheet-heading" class:list={{ "visually-hidden": hasSheet }}>Lab sheet</h2>
+        {
+          hasSheet ? (
+            <Prose>
+              <Content />
+            </Prose>
+          ) : (
+            <p class="coming">Lab sheet coming.</p>
+          )
+        }
+      </section>
+
+      {
+        lab.interactive && (
+          <section class="tool no-print" id="tool" data-tool={lab.interactive} aria-labelledby="tool-heading">
+            <h2 id="tool-heading">The tool</h2>
+            <p class="coming">This lab uses {TOOL_NAMES[lab.interactive]}. It will be on this page.</p>
+          </section>
+        )
+      }
+      {
+        lab.platform === "boodlebox" && (
+          <section class="tool no-print" aria-labelledby="tool-heading">
+            <h2 id="tool-heading">Where it runs</h2>
+            <p>This lab runs in BoodleBox.</p>
+          </section>
+        )
+      }
+
+      {
+        cycle && (
+          <section aria-labelledby="open-heading">
+            <h2 id="open-heading">The question it leaves open</h2>
+            <p class="question">
+              <a href={paths.cycle(base, cycle.number)}>{cycle.question}</a>
+            </p>
+            <p class="fine">Cycle {cycle.number} takes it up: the weekend’s reading, then Tuesday’s seminar.</p>
+          </section>
+        )
+      }
+
+      <AskBot context={labContext(courseCode(site.title), lab)} starters={labStarters(lab)} rule={LAB_RULE} />
+    </div>
+
+    <nav class="pager" aria-label="Other labs">
+      {previous ? <a href={paths.lab(base, previous.number)} rel="prev">← Lab {previous.number}</a> : <span />}
+      <a href={paths.labs(base)}>All labs</a>
+      {next ? <a href={paths.lab(base, next.number)} rel="next">Lab {next.number} →</a> : <span />}
+    </nav>
+  </article>
+
+  <script>
+    // Show or hide the lab's detail for today's date (or the ?date= being previewed).
+    import { readClock } from "../../lib/clock";
+    import { site } from "../../site.config";
+
+    const detail = document.getElementById("lab-detail");
+    const wait = document.getElementById("lab-wait");
+    if (detail && wait) {
+      const { today } = readClock(site.timezone, location.search);
+      const revealed = today >= (detail.dataset.revealOn ?? "");
+      detail.hidden = !revealed;
+      wait.hidden = revealed;
+    }
+  </script>
+</Base>

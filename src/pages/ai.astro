@@ -1,0 +1,133 @@
+---
+// The AI rules on one page: the rule in one line, what open, closed and
+// required mean, the disclosure rule, the rule for each assignment, a link
+// to the Charter, and what the course bot will and won't do.
+//
+// The prose is src/content/pages/ai.md. The lists are built from the
+// assignment files and src/data/bot.json.
+import { getCollection, getEntry, render } from "astro:content";
+import Prose from "../components/Prose.astro";
+import Base from "../layouts/Base.astro";
+import { formatLong } from "../lib/dates";
+import { aiMarker, aiRuleMarker } from "../lib/html";
+import { base, loadBot, loadSchedule } from "../lib/load-schedule";
+import { paths } from "../lib/paths";
+import { site } from "../site.config";
+
+const schedule = await loadSchedule();
+const bot = loadBot();
+const page = await getEntry("pages", "ai");
+const Content = page ? (await render(page)).Content : null;
+
+const charter = (await getCollection("charter")).sort((a, b) => b.data.version - a.data.version)[0];
+const hasBotLink = site.botUrl.trim() !== "";
+
+// Which kinds of session have AI on, and which off.
+const kindsWith = (ai: "on" | "off") => [...new Set(schedule.sessions.filter((s) => s.ai === ai).map((s) => s.kind))];
+const KIND_PLURALS: Record<string, string> = {
+  opener: "the opening session",
+  lab: "labs",
+  seminar: "seminars",
+  studio: "studio sessions",
+  crit: "the Crit",
+  exhibition: "the Exhibition",
+  debrief: "the debrief",
+  convention: "the Convention",
+  conference: "conferences",
+  synthesis: "the synthesis session",
+  paper: "the paper sittings",
+};
+const list = (kinds: string[]) => kinds.map((k) => KIND_PLURALS[k] ?? k).join(", ");
+---
+
+<Base title={page?.data.title ?? "AI rules"} description={`What AI may be used for in ${site.title}, ${site.term}.`} handout>
+  <h1>{page?.data.title ?? "AI rules"}</h1>
+
+  {
+    Content ? (
+      <Prose>
+        <Content />
+      </Prose>
+    ) : (
+      <p class="coming">The AI rules are coming.</p>
+    )
+  }
+
+  <section class="block" aria-labelledby="sessions-heading">
+    <h2 id="sessions-heading">In class</h2>
+    <p>Every session on the schedule carries one of two markers.</p>
+    <ul class="plain-list">
+      <li class="row">
+        <Fragment set:html={aiMarker("on")} /> {list(kindsWith("on"))}
+      </li>
+      <li class="row">
+        <Fragment set:html={aiMarker("off")} /> {list(kindsWith("off"))}
+      </li>
+    </ul>
+  </section>
+
+  <section class="block" aria-labelledby="work-heading">
+    <h2 id="work-heading">For each assignment</h2>
+    <ul class="plain-list">
+      {
+        schedule.assignments
+          .filter((a) => a.aiRule !== "none")
+          .map((a) => (
+            <li class="row">
+              <a href={paths.assignment(base, a.slug)}>{a.title}</a> <Fragment set:html={aiRuleMarker(a.aiRule)} />{" "}
+              <span class="fine">{a.aiRuleText}</span>
+            </li>
+          ))
+      }
+    </ul>
+  </section>
+
+  <section class="block" aria-labelledby="charter-heading">
+    <h2 id="charter-heading">The Charter</h2>
+    <p>
+      Inside these rules, the class writes its own. <a href={paths.charter(base)}>Read the Charter</a>
+      {
+        charter
+          ? `, version ${charter.data.version}, ${charter.data.status} ${formatLong(charter.data.date)}.`
+          : ". No version is posted yet."
+      }
+    </p>
+  </section>
+
+  <section class="block" aria-labelledby="bot-heading">
+    <h2 id="bot-heading">The course bot</h2>
+    <p>
+      The {site.botName} is a chatbot in BoodleBox set up for this course. Its job is to help you think. It is not to
+      think for you.
+      {" "}
+      {
+        hasBotLink ? (
+          <a href={site.botUrl} target="_blank" rel="noopener noreferrer" data-keep-href>
+            Open the {site.botName} (BoodleBox, new tab)
+          </a>
+        ) : (
+          <span class="link-coming">The link to it is coming.</span>
+        )
+      }
+    </p>
+    <div class="two-up">
+      <div>
+        <h3>What it will do</h3>
+        <ul>
+          {bot.does.map((line) => <li>{line}</li>)}
+        </ul>
+      </div>
+      <div>
+        <h3>What it won’t do</h3>
+        <ul>
+          {bot.doesNot.map((line) => <li>{line}</li>)}
+        </ul>
+      </div>
+    </div>
+    {bot.always.map((line) => <p>{line}</p>)}
+    <p class="fine">
+      These are the bot’s instructions. A chatbot does not always follow its instructions, and what you hand in is still
+      yours to answer for.
+    </p>
+  </section>
+</Base>

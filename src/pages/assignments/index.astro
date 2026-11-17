@@ -1,0 +1,42 @@
+---
+// Every kind of assignment, with its AI rule.
+import Base from "../../layouts/Base.astro";
+import { aiRuleMarker } from "../../lib/html";
+import { base, loadSchedule } from "../../lib/load-schedule";
+import { paths } from "../../lib/paths";
+import { site } from "../../site.config";
+
+const schedule = await loadSchedule();
+
+// In the order a student meets them.
+const firstDate = (a: (typeof schedule.assignments)[number]) => {
+  const dates = [
+    ...(a.dueDates ?? []).map((d) => d.date),
+    ...(a.sessions ?? []).map((n) => schedule.sessions.find((s) => s.number === n)?.date ?? ""),
+  ].filter(Boolean);
+  return dates.sort()[0] ?? "9999";
+};
+const assignments = [...schedule.assignments].sort((x, y) => firstDate(x).localeCompare(firstDate(y)));
+---
+
+<Base title="Assignments" description={`How each assignment works in ${site.title}, ${site.term}.`}>
+  <h1>Assignments</h1>
+  <p class="lede">
+    Coursework is handed in on Canvas, and grades are kept there. These pages say how each piece works.{" "}
+    <a href={paths.contract(base)}>The contract</a> says how many of each your tier needs.
+  </p>
+
+  <ul class="plain-list">
+    {
+      assignments.map((a) => (
+        <li class="row">
+          <h2>
+            <a href={paths.assignment(base, a.slug)}>{a.title}</a> <Fragment set:html={aiRuleMarker(a.aiRule)} />
+          </h2>
+          <p>{a.summary}.</p>
+          {a.dueRule && <p class="fine">{a.dueRule}</p>}
+        </li>
+      ))
+    }
+  </ul>
+</Base>

@@ -1,10 +1,15 @@
 // Build-time only: reads the content collections and returns the Schedule.
 
 import { getCollection } from "astro:content";
-import { termSchema } from "../content/schemas";
+import { botSchema, contractSchema, promptsSchema, termSchema } from "../content/schemas";
+import botJson from "../data/bot.json";
+import contractJson from "../data/contract.json";
+import promptsJson from "../data/prompts.json";
 import termJson from "../data/term.json";
 import { site } from "../site.config";
 import { isIsoDate, todayIn, type IsoDate } from "./dates";
+import { sectionHeadings } from "./guide";
+import { linkFromHome } from "./html";
 import { buildSchedule, type Schedule } from "./schedule";
 
 let cached: Schedule | undefined;
@@ -23,10 +28,15 @@ export async function loadSchedule(): Promise<Schedule> {
   cached = buildSchedule({
     sessions: sessions.map((e) => {
       const html = e.rendered?.html?.trim();
-      return { ...e.data, ...(html && { html }) };
+      return { ...e.data, ...(html && { html: linkFromHome(html, base) }) };
     }),
     cycles: cycles.map((e) => e.data),
-    readings: readings.map((e) => ({ ...e.data, slug: e.id, hasGuide: (e.body ?? "").trim().length > 0 })),
+    readings: readings.map((e) => ({
+      ...e.data,
+      slug: e.id,
+      hasGuide: (e.body ?? "").trim().length > 0,
+      guideHeadings: sectionHeadings(e.body ?? ""),
+    })),
     labs: labs.map((e) => e.data),
     assignments: assignments.map((e) => ({ ...e.data, slug: e.id })),
     term: termSchema.parse(termJson),
@@ -47,3 +57,16 @@ export function buildDate(): IsoDate {
 
 /** The site's base path, always ending in a slash. */
 export const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+
+// ---- The single data files in src/data/ ----
+
+export const loadContract = () => contractSchema.parse(contractJson);
+export const loadPrompts = () => promptsSchema.parse(promptsJson);
+export const loadBot = () => botSchema.parse(botJson);
+
+/** A link into the Canvas course, or "" until site.canvasUrl is set. */
+export function canvasLink(path?: string): string {
+  const home = site.canvasUrl.trim();
+  if (home === "") return "";
+  return path ? `${home.replace(/\/$/, "")}/${path.replace(/^\//, "")}` : home;
+}

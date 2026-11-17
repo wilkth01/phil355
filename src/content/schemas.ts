@@ -68,6 +68,7 @@ export const readingSchema = z
     access: z.enum(["canvas", "library", "open"]).nullable(),
     url: z.url().optional(),
     excerpt: text.optional(), // what is assigned
+    botStarters: z.array(text).optional(), // opening messages for the course bot; defaults are used when absent
   })
   .refine((r) => r.author !== null || r.title !== null, {
     message: "A reading needs an author or a title",
@@ -80,6 +81,7 @@ export const labSchema = z.strictObject({
   interactive: z.enum(["next-word", "footprint", "calibration", "sample", "labeling", "fairness"]).optional(),
   platform: z.enum(["boodlebox"]).optional(), // for labs run in BoodleBox rather than on the site
   revealOn: isoDate,
+  botStarters: z.array(text).optional(), // opening messages for the course bot; defaults are used when absent
 });
 
 export const assignmentKinds = ["in-class", "weekly", "team", "class", "paper", "tier"] as const;
@@ -107,7 +109,13 @@ export const assignmentSchema = z
     // "mixed" is for rules that differ by stage; "none" is for work with no AI rule.
     aiRule: z.enum(["open", "closed", "required", "mixed", "none"]),
     aiRuleText: text, // the rule in words
-    canvasPath: text.optional(),
+    canvasPath: text.optional(), // added to site.canvasUrl to reach this assignment in Canvas
+    // Numbers of the class sessions where this assignment happens. The page
+    // lists them with their dates, which are read from the session files.
+    sessions: z.array(z.number().int().positive()).optional(),
+    showPrompts: z.boolean().optional(), // true to print the five prompts on the page
+    cases: z.enum(["four-minute", "bank"]).optional(), // which set of cases the page lists
+    botStarters: z.array(text).optional(), // opening messages for the course bot; defaults are used when absent
   })
   .refine((a) => a.dueRule !== undefined || (a.dueDates?.length ?? 0) > 0, {
     message: "An assignment needs a dueRule or at least one entry in dueDates",
@@ -164,10 +172,19 @@ export const contractSchema = z.strictObject({
   }),
 });
 
+// What the course bot will and won't do, as the AI page lists it.
+export const botSchema = z.strictObject({
+  does: z.array(text).min(1),
+  doesNot: z.array(text).min(1),
+  always: z.array(text),
+});
+
 export type SessionData = z.infer<typeof sessionSchema>;
 export type CycleData = z.infer<typeof cycleSchema>;
 export type ReadingData = z.infer<typeof readingSchema>;
 export type LabData = z.infer<typeof labSchema>;
 export type AssignmentData = z.infer<typeof assignmentSchema>;
+export type CharterData = z.infer<typeof charterSchema>;
+export type CaseData = z.infer<typeof caseSchema>;
 export type TermData = z.infer<typeof termSchema>;
 export type ContractData = z.infer<typeof contractSchema>;

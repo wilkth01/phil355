@@ -2,8 +2,9 @@
 import Base from "../layouts/Base.astro";
 import { sessionKinds } from "../content/schemas";
 import { addDays, formatLong, formatRange, formatShort } from "../lib/dates";
-import { aiMarker, citation, dueLabel, dueTime, kindLabel, roleLabel } from "../lib/html";
-import { buildDate, loadSchedule } from "../lib/load-schedule";
+import { aiMarker, citationLink, dueLabel, dueTime, kindLabel, roleLabel } from "../lib/html";
+import { base, buildDate, loadSchedule } from "../lib/load-schedule";
+import { paths } from "../lib/paths";
 import type { Week } from "../lib/schedule";
 import { site } from "../site.config";
 
@@ -67,9 +68,7 @@ function weekDates(week: Week): string {
             <ol class="sessions">
               {week.sessions.map((n) => {
                 const s = sessionByNumber.get(n)!;
-                const meta = [`Session ${s.number}`];
-                if (s.cycle) meta.push(`Cycle ${s.cycle}`);
-                if (s.ticket) meta.push("Reading ticket at the start");
+                const ticket = s.ticket ? " · Reading ticket at the start" : "";
                 return (
                   <li class="session" data-kind={s.kind}>
                     <p class="when">{formatShort(s.date)}</p>
@@ -78,7 +77,22 @@ function weekDates(week: Week): string {
                       <p class="session-meta">
                         <span class="kind">{kindLabel(s.kind)}</span>{" "}
                         <Fragment set:html={aiMarker(s.ai)} />{" "}
-                        <span class="fine">{meta.join(" · ")}</span>
+                        <span class="fine">
+                          Session {s.number}
+                          {s.cycle !== undefined && (
+                            <Fragment>
+                              {" · "}
+                              <a href={paths.cycle(base, s.cycle)}>Cycle {s.cycle}</a>
+                            </Fragment>
+                          )}
+                          {s.lab !== undefined && (
+                            <Fragment>
+                              {" · "}
+                              <a href={paths.lab(base, s.lab)}>Lab {s.lab} page</a>
+                            </Fragment>
+                          )}
+                          {ticket}
+                        </span>
                       </p>
                       {s.bring && <p class="session-note">Bring: {s.bring}</p>}
                       {s.readBefore.length > 0 && (
@@ -90,7 +104,7 @@ function weekDates(week: Week): string {
                               return (
                                 <li>
                                   <span class="role">{roleLabel(r.role)}</span>{" "}
-                                  <span class="citation" set:html={citation(r)} />
+                                  <span class="citation" set:html={citationLink(r, base)} />
                                 </li>
                               );
                             })}
@@ -110,7 +124,9 @@ function weekDates(week: Week): string {
               <ul class="due-list">
                 {week.due.map((d) => (
                   <li>
-                    <span class="due-label">{dueLabel(d)}</span>{" "}
+                    <span class="due-label">
+                      <a href={paths.assignment(base, d.assignment)}>{dueLabel(d)}</a>
+                    </span>{" "}
                     <span class="due-when">
                       {formatLong(d.date)}
                       {dueTime(d)}

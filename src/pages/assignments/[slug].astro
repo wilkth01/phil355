@@ -1,0 +1,216 @@
+---
+// One page per assignment: how it works, when it is due, where it is
+// handed in, what AI may be used for, and what passing looks like.
+//
+// The dates, the hand-in line and the AI rule come from the file's front
+// matter. "How it works" and "What passing looks like" are the file's body.
+import { getCollection, render } from "astro:content";
+import AskBot from "../../components/AskBot.astro";
+import Prose from "../../components/Prose.astro";
+import Base from "../../layouts/Base.astro";
+import { assignmentContext, assignmentRule, assignmentStarters, courseCode } from "../../lib/bot";
+import { formatLong, formatShort, formatTime, type IsoDate } from "../../lib/dates";
+import { aiRuleMarker } from "../../lib/html";
+import { base, buildDate, canvasLink, loadPrompts, loadSchedule } from "../../lib/load-schedule";
+import { paths } from "../../lib/paths";
+import { site } from "../../site.config";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("assignments");
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const schedule = await loadSchedule();
+const a = schedule.assignments.find((x) => x.slug === entry.id)!;
+const hasBody = (entry.body ?? "").trim().length > 0;
+const { Content } = await render(entry);
+const today = buildDate();
+
+const KIND_WORDS = {
+  "in-class": "In class",
+  weekly: "Weekly",
+  team: "Team",
+  class: "Whole class",
+  paper: "Paper",
+  tier: "A and B tiers",
+} as const;
+
+// ---- The timeline: dated deadlines, and the class sessions where this happens ----
+interface Row {
+  date: IsoDate;
+  label: string;
+  inClass: boolean;
+  note?: string;
+  time?: string;
+}
+const sessionOn = (date: IsoDate) => schedule.sessions.find((s) => s.date === date);
+// A set time of day, when the schedule gives this deadline one.
+const timeOf = (date: IsoDate, label: string) => {
+  const time = schedule.due.find((d) => d.assignment === a.slug && d.date === date && d.label === label)?.time;
+  return time ? { time } : {};
+};
+const rows: Row[] = (a.dueDates ?? []).map((d) => ({
+  date: d.date,
+  label: d.label,
+  inClass: d.inClass,
+  ...(d.note && { note: d.note }),
+  ...timeOf(d.date, d.label),
+}));
+for (const n of a.sessions ?? []) {
+  const s = schedule.sessions.find((x) => x.number === n)!;
+  if (!rows.some((row) => row.inClass && row.date === s.date)) rows.push({ date: s.date, label: s.title, inClass: true });
+}
+rows.sort((x, y) => x.date.localeCompare(y.date));
+
+// ---- Where it is handed in ----
+const outsideClass = rows.some((row) => !row.inClass);
+const inClass = rows.some((row) => row.inClass) || a.kind === "in-class";
+const canvas = canvasLink(a.canvasPath);
+
+// ---- Cases: published ones only. An unpublished case is left out of the built page altogether. ----
+const allCases = a.cases ? (await getCollection("cases")).filter((c) => c.data.set === a.cases) : [];
+const published = allCases
+  .filter((c) => c.data.publishOn <= today)
+  .sort((x, y) => x.data.publishOn.localeCompare(y.data.publishOn) || x.data.title.localeCompare(y.data.title));
+const upcoming = allCases.filter((c) => c.data.publishOn > today).map((c) => c.data.publishOn).sort();
+const cases = await Promise.all(published.map(async (c) => ({ id: c.id, title: c.data.title, Content: (await render(c)).Content })));
+const caseHeading = a.cases === "bank" ? "The case bank" : "Cases";
+
+const prompts = a.showPrompts ? loadPrompts() : [];
+---
+
+<Base title={a.title} description={`${a.title} in ${site.title}: ${a.summary}`} handout>
+  <article class="assignment">
+    <p class="kicker">
+      <span class="role">{KIND_WORDS[a.kind]}</span>
+      {a.counts && a.counts > 1 && <span class="fine"> · {a.counts} in the semester</span>}
+    </p>
+    <h1>{a.title}</h1>
+    <p class="lede">{a.summary}.</p>
+
+    <dl class="facts">
+      <div>
+        <dt>AI</dt>
+        <dd>
+          <Fragment set:html={aiRuleMarker(a.aiRule)} />{" "}
+          {a.aiRule === "none" ? "No AI rule applies. " : `${a.aiRuleText.charAt(0).toUpperCase()}${a.aiRuleText.slice(1)}. `}
+          <a class="no-print" href={paths.ai(base)}>What the rules mean</a>
+        </dd>
+      </div>
+      {
+        a.dueRule && (
+          <div>
+            <dt>When</dt>
+            <dd>{a.dueRule}</dd>
+          </div>
+        )
+      }
+      <div>
+        <dt>Handed in</dt>
+        <dd>
+          {outsideClass && canvas && <a href={canvas}>On Canvas</a>}
+          {outsideClass && !canvas && "On Canvas. Link coming."}
+          {outsideClass && inClass && " The rest happens in class."}
+          {!outsideClass && inClass && "In class. Nothing is handed in outside class."}
+          {!outsideClass && !inClass && "Details coming."}
+        </dd>
+      </div>
+      <div class="no-print">
+        <dt>Counts toward</dt>
+        <dd>
+          <a href={paths.contract(base)}>The contract</a>
+        </dd>
+      </div>
+    </dl>
+
+    <p class="no-print">
+      <button type="button" class="button button-quiet" data-print hidden>Print this page</button>
+    </p>
+
+    {
+      rows.length > 0 && (
+        <section aria-labelledby="dates-heading">
+          <h2 id="dates-heading">Dates</h2>
+          <ol class="timeline" data-dated>
+            {rows.map((row) => {
+              const s = row.inClass ? sessionOn(row.date) : undefined;
+              return (
+                <li data-date={row.date}>
+                  <p class="when">{formatShort(row.date)}</p>
+                  <p>
+                    <span class="due-label">{row.label}</span>
+                    <span class="fine">
+                      {row.inClass ? " · in class" : ` · due${row.time ? ` by ${formatTime(row.time)}` : ""}`}
+                      {s && s.title !== row.label && ` · ${s.title}`}
+                      {row.note && ` · ${row.note}`}
+                    </span>
+                  </p>
+                </li>
+              );
+            })}
+          </ol>
+          <p class="fine no-print">
+            <a href={paths.schedule(base)}>See the whole schedule</a>
+          </p>
+        </section>
+      )
+    }
+
+    {
+      hasBody ? (
+        <Prose>
+          <Content />
+        </Prose>
+      ) : (
+        <p class="coming">How this works, and what passing looks like: details coming.</p>
+      )
+    }
+
+    {
+      prompts.length > 0 && (
+        <section aria-labelledby="prompts-heading">
+          <h2 id="prompts-heading">The five prompts</h2>
+          <ol class="prompts">
+            {prompts.map((p) => (
+              <li>{p}</li>
+            ))}
+          </ol>
+        </section>
+      )
+    }
+
+    {
+      a.cases && (
+        <section aria-labelledby="cases-heading">
+          <h2 id="cases-heading">{caseHeading}</h2>
+          {cases.length === 0 && upcoming.length === 0 && <p class="coming">No cases are posted yet.</p>}
+          {cases.length === 0 && upcoming.length > 0 && (
+            <p class="coming">
+              {a.cases === "bank" ? "The case bank opens" : "The first case is posted"} on {formatLong(upcoming[0]!)}.
+            </p>
+          )}
+          {cases.length > 1 && (
+            <ul class="case-index no-print">
+              {cases.map((c) => (
+                <li>
+                  <a href={`#case-${c.id}`}>{c.title}</a>
+                </li>
+              ))}
+            </ul>
+          )}
+          {cases.map((c) => (
+            <section class="case" id={`case-${c.id}`} aria-labelledby={`case-${c.id}-heading`}>
+              <h3 id={`case-${c.id}-heading`}>{c.title}</h3>
+              <Prose>
+                <c.Content />
+              </Prose>
+            </section>
+          ))}
+        </section>
+      )
+    }
+  </article>
+
+  <AskBot context={assignmentContext(courseCode(site.title), a)} starters={assignmentStarters(a)} rule={assignmentRule(a)} />
+</Base>

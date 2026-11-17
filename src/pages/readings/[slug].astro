@@ -1,0 +1,125 @@
+---
+// One page per assigned text: the reading guide, how to get the text, what
+// is assigned, how long it is, a print button, and the course bot block.
+// The text itself is never on the site; the page links out to it.
+import { getCollection, render } from "astro:content";
+import AskBot from "../../components/AskBot.astro";
+import Prose from "../../components/Prose.astro";
+import Base from "../../layouts/Base.astro";
+import { READING_RULE, courseCode, readingContext, readingName, readingStarters } from "../../lib/bot";
+import { formatLong } from "../../lib/dates";
+import { citationLink, readingLength, readingTitle, roleLabel } from "../../lib/html";
+import { base, canvasLink, loadSchedule } from "../../lib/load-schedule";
+import { paths } from "../../lib/paths";
+import { site } from "../../site.config";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("readings");
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const schedule = await loadSchedule();
+const r = schedule.readings[entry.id]!;
+const cycle = schedule.cycles.find((c) => c.number === r.cycle);
+const core = cycle ? schedule.readings[cycle.coreReading] : undefined;
+const readFor = schedule.sessions.filter((s) => s.readBefore.includes(r.slug));
+const length = readingLength(r);
+const { Content } = await render(entry);
+
+// How to get the text. The site links out; it never hosts a reading.
+const ACCESS_WORDS = { canvas: "On Canvas", library: "Through Wolfgram Library", open: "Free to read online" } as const;
+const accessUrl = r.access === "canvas" ? (r.url ?? canvasLink()) : (r.url ?? "");
+const code = courseCode(site.title);
+---
+
+<Base title={readingName(r)} description={`Reading guide for ${readingName(r)}.`} handout>
+  <article class="reading">
+    <p class="kicker">
+      <span class="role">{roleLabel(r.role)} reading</span>
+      {cycle && (
+        <Fragment>
+          {" · "}
+          <a href={paths.cycle(base, cycle.number)}>Cycle {cycle.number}</a>
+        </Fragment>
+      )}
+    </p>
+    <h1 set:html={readingTitle(r)} />
+    {
+      (r.title !== null && (r.author || r.source || r.year !== null)) && (
+        <p class="lede">
+          {[r.author, r.source, r.year].filter((part) => part !== null && part !== undefined).join(", ")}
+        </p>
+      )
+    }
+
+    <dl class="facts">
+      {
+        r.excerpt && (
+          <div>
+            <dt>Assigned</dt>
+            <dd>{r.excerpt.charAt(0).toUpperCase() + r.excerpt.slice(1)}</dd>
+          </div>
+        )
+      }
+      {
+        length && (
+          <div>
+            <dt>Length</dt>
+            <dd>{length}</dd>
+          </div>
+        )
+      }
+      {
+        readFor.map((s) => (
+          <div>
+            <dt>Read before</dt>
+            <dd>
+              {formatLong(s.date)}, for the seminar “{s.title}”
+            </dd>
+          </div>
+        ))
+      }
+      {
+        readFor.length === 0 && r.role === "optional" && (
+          <div>
+            <dt>Read before</dt>
+            <dd>Optional. Nothing depends on it.</dd>
+          </div>
+        )
+      }
+      <div class="no-print">
+        <dt>Get the text</dt>
+        <dd>
+          {r.access === null && "How to get the text is coming with the guide."}
+          {r.access !== null && accessUrl && <a href={accessUrl}>{ACCESS_WORDS[r.access]}</a>}
+          {r.access !== null && !accessUrl && `${ACCESS_WORDS[r.access]}. Link coming.`}
+        </dd>
+      </div>
+    </dl>
+
+    <p class="no-print">
+      <button type="button" class="button button-quiet" data-print hidden>Print this page</button>
+    </p>
+
+    <section class="guide" aria-labelledby="guide-heading">
+      <h2 id="guide-heading" class:list={{ "visually-hidden": r.hasGuide }}>Reading guide</h2>
+      {
+        r.hasGuide ? (
+          <Prose>
+            <Content />
+          </Prose>
+        ) : core && core.slug !== r.slug && core.hasGuide ? (
+          <p>
+            This reading is covered in the guide for the cycle’s core reading:{" "}
+            <span set:html={citationLink(core, base)} />.
+          </p>
+        ) : (
+          <p class="coming">Guide coming.</p>
+        )
+      }
+    </section>
+  </article>
+
+  <AskBot context={readingContext(code, r)} starters={readingStarters(r, cycle)} rule={READING_RULE} />
+</Base>

@@ -1,0 +1,36 @@
+---
+// Every assigned text, cycle by cycle.
+import ReadingList from "../../components/ReadingList.astro";
+import Base from "../../layouts/Base.astro";
+import { base, loadSchedule } from "../../lib/load-schedule";
+import { paths } from "../../lib/paths";
+import { site } from "../../site.config";
+
+const schedule = await loadSchedule();
+const order = { core: 0, companion: 1, optional: 2 } as const;
+---
+
+<Base title="Readings" description={`Every reading in ${site.title}, ${site.term}.`}>
+  <h1>Readings</h1>
+  <p class="lede">
+    One core reading in each cycle, sometimes with a shorter companion. This site holds the reading guides and links
+    out to the texts.
+  </p>
+
+  {
+    schedule.cycles.map((c) => {
+      const readings = Object.values(schedule.readings)
+        .filter((r) => r.cycle === c.number)
+        .sort((a, b) => order[a.role] - order[b.role]);
+      return (
+        <section class="block" aria-labelledby={`cycle-${c.number}`}>
+          <h2 id={`cycle-${c.number}`}>
+            <a href={paths.cycle(base, c.number)}>Cycle {c.number}</a>
+          </h2>
+          <p class="question">{c.question}</p>
+          <ReadingList readings={readings} />
+        </section>
+      );
+    })
+  }
+</Base>

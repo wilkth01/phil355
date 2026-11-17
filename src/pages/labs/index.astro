@@ -1,0 +1,36 @@
+---
+// The ten labs, in order.
+import Base from "../../layouts/Base.astro";
+import { formatLong } from "../../lib/dates";
+import { aiMarker } from "../../lib/html";
+import { base, loadSchedule } from "../../lib/load-schedule";
+import { paths } from "../../lib/paths";
+import { site } from "../../site.config";
+
+const schedule = await loadSchedule();
+const session = (n: number) => schedule.sessions.find((s) => s.number === n)!;
+---
+
+<Base title="Labs" description={`The ten labs of ${site.title}, ${site.term}.`}>
+  <h1>Labs</h1>
+  <p class="lede">A lab needs no preparation. Each lab sheet appears on the day of the lab.</p>
+
+  <ol class="plain-list" data-dated>
+    {
+      schedule.labs.map((lab) => {
+        const s = session(lab.session);
+        return (
+          <li class="row" data-date={s.date}>
+            <p class="when">{formatLong(s.date)}</p>
+            <p>
+              <a href={paths.lab(base, lab.number)}>
+                Lab {lab.number}: {lab.title}
+              </a>{" "}
+              <Fragment set:html={aiMarker(s.ai)} />
+            </p>
+          </li>
+        );
+      })
+    }
+  </ol>
+</Base>
